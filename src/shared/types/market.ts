@@ -1,6 +1,8 @@
 /** 경제·원가(환율/유가/자재가격) 도메인 모델 */
 import type { TrendDirection, TrendPoint } from './common'
 
+export type { TrendDirection, TrendPoint }
+
 export interface ExchangeRateItem {
   code: string // USD, EUR, JPY, CNY
   pairLabel: string // USD/KRW

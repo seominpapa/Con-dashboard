@@ -48,7 +48,7 @@ export async function decryptCredential(stored: string, secret: string): Promise
   const key = await deriveKey(secret)
   const iv = fromBase64(ivB64)
   const ciphertext = fromBase64(dataB64)
-  const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
+  const plainBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource }, key, ciphertext as BufferSource)
   return new TextDecoder().decode(plainBuf)
 }
 
