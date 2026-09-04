@@ -1,0 +1,45 @@
+import type { Bindings } from '../env'
+import type { LLMProvider } from './LLMProvider'
+import { ClaudeProvider } from './ClaudeProvider'
+import { CodexProvider } from './CodexProvider'
+import { IntegrationRepository } from '../repositories/IntegrationRepository'
+import { getAuthSecretFromEnv } from '../auth/session'
+
+export type LLMProviderKey = 'claude' | 'codex'
+
+/**
+ * LLM Provider 인스턴스 생성 (관리자 DB 연결 우선, ENV 폴백)
+ * 관리자가 /admin/integrations/ai 에서 연결을 완료하면 코드 재배포 없이
+ * 즉시 사용 가능해진다 (기획 53번 - DB 우선 조회).
+ */
+export async function getLLMProvider(env: Bindings, providerKey: LLMProviderKey): Promise<LLMProvider | null> {
+  const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
+  const dbCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>(providerKey)
+
+  const apiKey = dbCred?.apiKey || (providerKey === 'claude' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY)
+  if (!apiKey) return null
+
+  return providerKey === 'claude' ? new ClaudeProvider(apiKey) : new CodexProvider(apiKey)
+}
+
+/** 관리자가 지정한 기본 Provider를 가져온다. 없으면 연결된 Provider 중 하나를 자동 선택 */
+export async function getDefaultLLMProvider(env: Bindings): Promise<LLMProvider | null> {
+  const { SettingsRepository, SETTINGS_KEY } = await import('../repositories/SettingsRepository')
+  const settingsRepo = new SettingsRepository(env.DB)
+  const defaultKey = (await settingsRepo.get(SETTINGS_KEY.DEFAULT_LLM_PROVIDER)) as LLMProviderKey | null
+
+  if (defaultKey) {
+    const provider = await getLLMProvider(env, defaultKey)
+    if (provider) return provider
+  }
+
+  // 기본값 미설정 시: claude -> codex 순으로 연결된 것 사용
+  const claude = await getLLMProvider(env, 'claude')
+  if (claude) return claude
+  const codex = await getLLMProvider(env, 'codex')
+  if (codex) return codex
+  return null
+}
+
+export * from './LLMProvider'
+export * from './CredentialAdapter'
