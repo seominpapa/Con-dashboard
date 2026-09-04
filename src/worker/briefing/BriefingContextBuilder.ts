@@ -71,7 +71,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getWeatherProvider(env)
+          const provider = await getWeatherProvider(env)
           const weather = await provider.getCurrentWeather(site)
           const risk = evaluateConstructionWeatherRisk(weather)
           context.weather = { data: summarizeWeather(weather), risk, freshness: 'fresh' }
@@ -86,7 +86,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getWeatherProvider(env)
+          const provider = await getWeatherProvider(env)
           const alerts = await provider.getAlerts(site)
           if (alerts.length > 0) context.weatherAlerts = { data: alerts, freshness: 'fresh' }
         } catch {
@@ -100,7 +100,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getAirQualityProvider(env)
+          const provider = await getAirQualityProvider(env)
           const aq = await provider.getCurrentAirQuality(site)
           context.airQuality = { data: aq, freshness: isFresh(aq.measuredAt, 60 * 60 * 1000) }
         } catch {
@@ -148,7 +148,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getSiteSummaryProvider(env)
+          const provider = await getSiteSummaryProvider(env)
           const summary = await provider.getTodaySummary(site)
           context.siteSummary = { data: summary, freshness: 'fresh' }
         } catch {
@@ -162,7 +162,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getBidProvider(env)
+          const provider = await getBidProvider(env)
           const bids = await provider.searchBids({}, 5)
           context.bidding = { data: bids, freshness: 'fresh' }
         } catch {
@@ -176,7 +176,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getNewsProvider(env)
+          const provider = await getNewsProvider(env)
           const news = await provider.getNews([], 5) // 중요기사 최대 5개 (기획 50번)
           context.news = { data: news, freshness: 'fresh' }
         } catch {
@@ -190,7 +190,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getLawProvider(env)
+          const provider = await getLawProvider(env)
           const laws = await provider.getLaws([...RECOMMENDED_LAWS])
           const changed = laws.filter((l) => l.changed)
           context.laws = { data: changed.length ? changed : laws.slice(0, 3), freshness: 'fresh' }
@@ -205,7 +205,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getExchangeRateProvider(env)
+          const provider = await getExchangeRateProvider(env)
           const rates = await provider.getRates(['USD'])
           context.exchangeRates = { data: rates, freshness: 'fresh' }
         } catch {
@@ -219,7 +219,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getOilPriceProvider(env)
+          const provider = await getOilPriceProvider(env)
           const prices = await provider.getPrices(['dubai', 'domestic-diesel'])
           context.oilPrices = { data: prices, freshness: 'fresh' }
         } catch {
@@ -233,7 +233,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = getMaterialPriceProvider(env)
+          const provider = await getMaterialPriceProvider(env)
           // 사용자가 선택한 자재만 (기획 50번) - 기본 카탈로그 상위 4개로 제한
           const keys = MATERIAL_CATALOG.slice(0, 4).map((m) => m.key)
           const prices = await provider.getPrices(keys)

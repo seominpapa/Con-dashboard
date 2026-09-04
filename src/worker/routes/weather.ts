@@ -39,7 +39,7 @@ app.get('/', async (c) => {
 
   const cacheKey = `weather:${site.id}:${site.kmaNx}:${site.kmaNy}`
   try {
-    const provider = getWeatherProvider(c.env)
+    const provider = await getWeatherProvider(c.env)
     const { value: weather, cached } = await withCache(cacheKey, CACHE_TTL.weather, () => provider.getCurrentWeather(site))
     const risk = evaluateConstructionWeatherRisk(weather)
     const envelope = ok({ weather, risk: { items: risk, disclaimer: WEATHER_RISK_DISCLAIMER } }, provider.source)
@@ -69,7 +69,7 @@ app.get('/alerts', async (c) => {
 
   const cacheKey = `weather-alert:${site.id}:${site.address}`
   try {
-    const provider = getWeatherProvider(c.env)
+    const provider = await getWeatherProvider(c.env)
     const { value: alerts, cached } = await withCache(cacheKey, CACHE_TTL.weatherAlert, () => provider.getAlerts(site))
     const envelope = ok(alerts, provider.source)
     envelope.cached = cached

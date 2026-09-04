@@ -4,6 +4,8 @@ import type { NewsItem, NewsCategory } from '../../../shared/types/news'
 import { RssNewsProvider } from './RssNewsProvider'
 import { NaverNewsProvider } from './NaverNewsProvider'
 import { MockNewsProvider } from './MockNewsProvider'
+import { IntegrationRepository } from '../../repositories/IntegrationRepository'
+import { getAuthSecretFromEnv } from '../../auth/session'
 
 /**
  * 공식 RSS(우선) + Naver News(선택, 보완) 조합 Provider.
@@ -36,10 +38,12 @@ class CompositeNewsProvider implements NewsProvider {
   }
 }
 
-export function getNewsProvider(env: Bindings): NewsProvider {
-  const naver = env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET
-    ? new NaverNewsProvider(env.NAVER_CLIENT_ID, env.NAVER_CLIENT_SECRET)
-    : undefined
+export async function getNewsProvider(env: Bindings): Promise<NewsProvider> {
+  const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
+  const dbCred = await integrationRepo.getDecryptedCredential<{ clientId: string; clientSecret: string }>('naver').catch(() => null)
+  const clientId = dbCred?.clientId || env.NAVER_CLIENT_ID
+  const clientSecret = dbCred?.clientSecret || env.NAVER_CLIENT_SECRET
+  const naver = clientId && clientSecret ? new NaverNewsProvider(clientId, clientSecret) : undefined
   // RSS는 API Key 불필요 -> 항상 시도 가능. Naver는 있으면 보완.
   return new CompositeNewsProvider(new RssNewsProvider(), naver)
 }

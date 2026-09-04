@@ -3,6 +3,8 @@ import type { OilPriceProvider } from './OilPriceProvider'
 import type { OilPriceItem, OilKind } from '../../../shared/types/market'
 import { OpinetOilPriceProvider } from './OpinetOilPriceProvider'
 import { MockOilPriceProvider } from './MockOilPriceProvider'
+import { IntegrationRepository } from '../../repositories/IntegrationRepository'
+import { getAuthSecretFromEnv } from '../../auth/session'
 
 /**
  * 국내 유가(Opinet, 실데이터 가능) + 국제유가(Dubai/WTI/Brent, 현재는 공식 무료
@@ -31,9 +33,12 @@ class CompositeOilPriceProvider implements OilPriceProvider {
   }
 }
 
-export function getOilPriceProvider(env: Bindings): OilPriceProvider {
-  if (env.OPINET_API_KEY) {
-    return new CompositeOilPriceProvider(new OpinetOilPriceProvider(env.OPINET_API_KEY), new MockOilPriceProvider())
+export async function getOilPriceProvider(env: Bindings): Promise<OilPriceProvider> {
+  const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
+  const dbCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>('opinet').catch(() => null)
+  const apiKey = dbCred?.apiKey || env.OPINET_API_KEY
+  if (apiKey) {
+    return new CompositeOilPriceProvider(new OpinetOilPriceProvider(apiKey), new MockOilPriceProvider())
   }
   return new MockOilPriceProvider()
 }
