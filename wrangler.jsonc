@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "webapp",
+  "name": "construction-dashboard",
   "compatibility_date": "2026-08-25",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": [
@@ -9,8 +9,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "webapp-production",
-      "database_id": "local-placeholder-will-be-replaced-on-deploy"
+      "database_name": "construction-dashboard-production",
+      "database_id": "b54cc6a4-084a-4f07-b9e1-bbd159cacc84"
     }
   ]
   // "vars": {
