@@ -132,3 +132,4 @@ curl http://localhost:3000
 
 환경변수는 `.env.example`을 참고해 `.dev.vars`로 복사 후 채워주세요 (모두 선택사항이며,
 비워두면 Mock 데이터로 정상 동작합니다).
+
