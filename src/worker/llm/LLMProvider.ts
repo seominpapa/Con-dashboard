@@ -42,3 +42,10 @@ export interface LLMProvider {
 
   getAvailableModels(): string[]
 }
+
+export function formatProviderHttpError(provider: string, status: number): string {
+  if (status === 401 || status === 403) return `${provider} 인증에 실패했습니다`
+  if (status === 429) return `${provider} 요청 한도를 초과했습니다`
+  if (status >= 500) return `${provider} 서비스가 일시적으로 응답하지 않습니다`
+  return `${provider} 요청에 실패했습니다 (${status})`
+}

@@ -16,6 +16,16 @@ const app = new Hono<AppEnv>()
 
 const STATE_COOKIE = 'cd_oauth_state'
 
+function isAuthConfigured(env: AppEnv['Bindings']): boolean {
+  if (!isGoogleOAuthConfigured(env)) return false
+  try {
+    getAuthSecretFromEnv(env)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function getRedirectUri(c: any, env: any): string {
   const base = env.APP_BASE_URL || new URL(c.req.url).origin
   return `${base}/api/auth/google/callback`
@@ -23,7 +33,7 @@ function getRedirectUri(c: any, env: any): string {
 
 // GET /api/auth/google - OAuth 시작
 app.get('/google', async (c) => {
-  if (!isGoogleOAuthConfigured(c.env)) {
+  if (!isAuthConfigured(c.env)) {
     return c.json(fail('Google 로그인이 아직 설정되지 않았습니다. 관리자에게 문의하세요.', 'unconfigured' as any), 503)
   }
   const state = generateId('state')
@@ -48,7 +58,7 @@ app.get('/google/callback', async (c) => {
   if (!code || !state || !savedState || state !== savedState) {
     return c.redirect('/login?error=invalid_state')
   }
-  if (!isGoogleOAuthConfigured(c.env)) {
+  if (!isAuthConfigured(c.env)) {
     return c.redirect('/login?error=not_configured')
   }
 
@@ -64,7 +74,7 @@ app.get('/google/callback', async (c) => {
       // 이메일 중복 체크 (다른 방식 가입 방지용, 현재는 Google만 지원하므로 googleId 우선)
       const byEmail = await userRepo.findByEmail(profile.email)
       if (byEmail) {
-        user = byEmail
+        throw new Error('Google 계정 식별자가 기존 사용자와 일치하지 않습니다')
       } else {
         const isBootstrapAdmin =
           c.env.DISABLE_ADMIN_BOOTSTRAP !== 'true' &&
@@ -129,7 +139,7 @@ app.post('/logout', async (c) => {
 
 // GET /api/auth/config - 클라이언트가 Google 로그인 버튼 노출 여부 판단용 (Key 노출 없음)
 app.get('/config', async (c) => {
-  return c.json({ status: 'success', data: { googleEnabled: isGoogleOAuthConfigured(c.env) } })
+  return c.json({ status: 'success', data: { googleEnabled: isAuthConfigured(c.env) } })
 })
 
 export default app

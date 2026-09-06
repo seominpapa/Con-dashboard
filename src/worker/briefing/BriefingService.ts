@@ -44,7 +44,13 @@ export async function getOrCreateTodayBriefing(
   }
 
   // LLM Provider 준비 여부 먼저 확인 (기획 53번: 미연결 시 "준비 중" 상태)
-  const llm = await getDefaultLLMProvider(env)
+  let llm
+  try {
+    llm = await getDefaultLLMProvider(env)
+  } catch (err) {
+    console.error('[briefing] provider setup failed:', err instanceof Error ? err.message : 'unknown error')
+    return { status: 'unavailable', briefingDate, message: 'AI 브리핑 Provider 설정을 확인해 주세요' }
+  }
   if (!llm) {
     return { status: 'unavailable', briefingDate, message: 'AI 브리핑 기능이 아직 준비 중입니다 (관리자 연결 필요)' }
   }

@@ -2,7 +2,7 @@ import type { LawProvider } from './LawProvider'
 import type { LawItem } from '../../../shared/types/law'
 
 /** 법제처 국가법령정보 Open API (law.go.kr) */
-const SEARCH_URL = 'http://www.law.go.kr/DRF/lawSearch.do'
+const SEARCH_URL = 'https://www.law.go.kr/DRF/lawSearch.do'
 
 export class NlicLawProvider implements LawProvider {
   readonly source = 'live' as const
@@ -36,6 +36,9 @@ export class NlicLawProvider implements LawProvider {
         } as LawItem
       })
     )
+    if (results.every((result) => result.status === 'rejected')) {
+      throw new Error('법제처 API에서 법령을 조회하지 못했습니다')
+    }
     const items = results.map((r, idx) => (r.status === 'fulfilled' ? r.value : failItem(lawNames[idx])))
     return items
   }

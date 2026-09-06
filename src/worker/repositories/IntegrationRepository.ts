@@ -99,7 +99,7 @@ export class IntegrationRepository {
 
   async disconnect(provider: string, updatedBy: string): Promise<void> {
     await this.db
-      .prepare(`UPDATE integrations SET status='DISCONNECTED', encrypted_credential=NULL, updated_by=?, updated_at=? WHERE provider=?`)
+      .prepare(`UPDATE integrations SET status='DISCONNECTED', encrypted_credential=NULL, connected_at=NULL, last_error=NULL, updated_by=?, updated_at=? WHERE provider=?`)
       .bind(updatedBy, new Date().toISOString(), provider)
       .run()
   }

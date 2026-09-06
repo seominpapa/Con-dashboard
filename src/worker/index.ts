@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from './env'
-import { attachUser, requireApproved, requireAdmin } from './middleware/auth'
+import { attachUser, requireApproved, requireAdmin, requireSameOriginMutation } from './middleware/auth'
 
 import authRoutes from './routes/auth'
 import weatherRoutes from './routes/weather'
@@ -26,6 +26,7 @@ const app = new Hono<AppEnv>()
 
 // 모든 요청에 currentUser를 주입 (세션 쿠키 검증) - 기획 31번 서버 미들웨어 계층
 app.use('*', attachUser)
+app.use('/api/*', requireSameOriginMutation)
 
 // ---- 인증 (로그인 불필요) ----
 app.route('/api/auth', authRoutes)

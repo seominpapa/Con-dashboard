@@ -1,4 +1,4 @@
-import type { LLMProvider, LLMMessage, LLMGenerateOptions, LLMResult } from './LLMProvider'
+import { formatProviderHttpError, type LLMProvider, type LLMMessage, type LLMGenerateOptions, type LLMResult } from './LLMProvider'
 
 const API_URL = 'https://api.openai.com/v1/chat/completions'
 const DEFAULT_MODEL = 'gpt-5.1'
@@ -19,9 +19,9 @@ export class CodexProvider implements LLMProvider {
   private async callApi(messages: LLMMessage[], options?: LLMGenerateOptions): Promise<LLMResult> {
     const body: any = {
       model: this.model,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map((m) => ({ role: m.role === 'system' ? 'developer' : m.role, content: m.content })),
       temperature: options?.temperature ?? 0.4,
-      max_tokens: options?.maxTokens ?? 2000,
+      max_completion_tokens: options?.maxTokens ?? 2000,
     }
     if (options?.jsonMode) {
       body.response_format = { type: 'json_object' }
@@ -36,8 +36,7 @@ export class CodexProvider implements LLMProvider {
       body: JSON.stringify(body),
     })
     if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`OpenAI API 오류 (${res.status}): ${text.slice(0, 200)}`)
+      throw new Error(formatProviderHttpError('OpenAI', res.status))
     }
     const json: any = await res.json()
     const text = json.choices?.[0]?.message?.content ?? ''

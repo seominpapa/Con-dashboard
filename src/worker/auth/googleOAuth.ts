@@ -12,6 +12,29 @@ export interface GoogleUserInfo {
   picture?: string
 }
 
+export function parseGoogleUserInfo(value: unknown): GoogleUserInfo {
+  if (!value || typeof value !== 'object') throw new Error('Invalid Google profile')
+  const profile = value as Record<string, unknown>
+  if (
+    typeof profile.sub !== 'string' ||
+    !profile.sub ||
+    typeof profile.email !== 'string' ||
+    !profile.email.includes('@') ||
+    typeof profile.name !== 'string' ||
+    !profile.name
+  ) {
+    throw new Error('Invalid Google profile')
+  }
+  if (profile.email_verified !== true) throw new Error('Google email is not verified')
+  return {
+    sub: profile.sub,
+    email: profile.email,
+    email_verified: true,
+    name: profile.name,
+    ...(typeof profile.picture === 'string' ? { picture: profile.picture } : {}),
+  }
+}
+
 export function isGoogleOAuthConfigured(env: Bindings): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 }
@@ -55,5 +78,5 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUs
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (!res.ok) throw new Error(`Google 사용자정보 조회 실패: ${res.status}`)
-  return res.json()
+  return parseGoogleUserInfo(await res.json())
 }

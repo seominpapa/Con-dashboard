@@ -35,10 +35,12 @@ export function AdminIntegrationsPage() {
   const [editing, setEditing] = useState<IntegrationRow | null>(null)
   const [credInputs, setCredInputs] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
     const res = await api.get<IntegrationRow[]>('/api/admin/integrations')
+    setError(res.status === 'error' ? res.message ?? '연동 정보를 불러오지 못했습니다' : null)
     setRows(res.data ?? [])
     setLoading(false)
   }
@@ -60,25 +62,35 @@ export function AdminIntegrationsPage() {
   async function handleConnect() {
     if (!editing) return
     setBusy(editing.provider)
-    await api.post(`/api/admin/integrations/${editing.provider}/connect`, { credential: credInputs })
+    setError(null)
+    const res = await api.post(`/api/admin/integrations/${editing.provider}/connect`, { credential: credInputs })
     setBusy(null)
+    if (res.status === 'error') {
+      setError(res.message ?? '연결에 실패했습니다')
+      return
+    }
     setEditing(null)
     setCredInputs({})
-    load()
+    await load()
   }
 
   async function handleTest(provider: string) {
     setBusy(provider)
-    await api.post(`/api/admin/integrations/${provider}/test`)
+    setError(null)
+    const res = await api.post<{ testResult: { ok: boolean; message?: string } }>(`/api/admin/integrations/${provider}/test`)
     setBusy(null)
-    load()
+    await load()
+    if (res.status === 'error') setError(res.message ?? '연결 테스트에 실패했습니다')
+    else if (res.data && !res.data.testResult.ok) setError(res.data.testResult.message ?? '연결 테스트에 실패했습니다')
   }
 
   async function handleDisconnect(provider: string) {
     setBusy(provider)
-    await api.post(`/api/admin/integrations/${provider}/disconnect`)
+    setError(null)
+    const res = await api.post(`/api/admin/integrations/${provider}/disconnect`)
     setBusy(null)
-    load()
+    await load()
+    if (res.status === 'error') setError(res.message ?? '연결 해제에 실패했습니다')
   }
 
   if (loading) return <p className="text-sm text-slate-400">불러오는 중...</p>
@@ -89,8 +101,9 @@ export function AdminIntegrationsPage() {
         <Plug size={15} /> 공개 데이터 API 연결 센터
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        여기서 연결한 자격증명은 암호화되어 저장되며, 승인된 모든 사용자가 즉시 공유해서 사용합니다. 환경변수(ENV)로 설정된 값이 있으면 자동으로 폴백됩니다.
+        관리자 로그인용 Google OAuth는 Cloudflare의 <code>GOOGLE_CLIENT_ID</code>·<code>GOOGLE_CLIENT_SECRET</code>로 설정합니다. 이 화면에서는 공개데이터 제공사의 API Key/Client ID를 등록하며, 값은 암호화되어 저장됩니다.
       </p>
+      {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
         {rows.map((r) => {
           const meta = STATUS_META[r.status]
@@ -151,10 +164,11 @@ export function AdminIntegrationsPage() {
               </div>
             ))}
           <p className="text-[11px] text-slate-400">저장 즉시 실제 연결 테스트가 수행됩니다. 값은 암호화되어 저장되며 이후 다시 조회할 수 없습니다.</p>
+          {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <button
             onClick={handleConnect}
-            disabled={busy === editing?.provider}
-            className={cn('w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700', busy === editing?.provider && 'opacity-50')}
+            disabled={!editing || fieldsFor(editing.provider).some((field) => !credInputs[field.key]?.trim()) || busy === editing?.provider}
+            className={cn('w-full rounded-lg bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700', (!editing || fieldsFor(editing.provider).some((field) => !credInputs[field.key]?.trim()) || busy === editing?.provider) && 'opacity-50')}
           >
             {busy === editing?.provider ? '연결 확인 중...' : '저장 및 연결'}
           </button>

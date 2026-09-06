@@ -23,9 +23,17 @@ export interface CredentialAdapter {
   /** 관리자 UI에 표시할 입력 필드 정의 */
   readonly fields: { key: string; label: string; type: 'text' | 'password'; placeholder?: string }[]
   /** 입력값 형식 검증 (실제 API 호출 없이 빠른 sanity check) */
-  validate(input: CredentialInput): { valid: boolean; message?: string }
+  validate(input: unknown): { valid: boolean; message?: string }
   /** 저장 전 정규화 (트림 등) */
   normalize(input: CredentialInput): Record<string, string>
+}
+
+function validateApiKey(input: unknown): { valid: boolean; message?: string } {
+  const apiKey = input && typeof input === 'object' && !Array.isArray(input) ? (input as Record<string, unknown>).apiKey : null
+  if (typeof apiKey !== 'string' || apiKey.trim().length < 10 || apiKey.length > 4096) {
+    return { valid: false, message: 'API Key 형식이 올바르지 않습니다' }
+  }
+  return { valid: true }
 }
 
 export class ClaudeCredentialAdapter implements CredentialAdapter {
@@ -34,11 +42,8 @@ export class ClaudeCredentialAdapter implements CredentialAdapter {
     { key: 'apiKey', label: 'Anthropic API Key', type: 'password' as const, placeholder: 'sk-ant-...' },
   ]
 
-  validate(input: CredentialInput) {
-    if (!input.apiKey || input.apiKey.trim().length < 10) {
-      return { valid: false, message: 'API Key 형식이 올바르지 않습니다' }
-    }
-    return { valid: true }
+  validate(input: unknown) {
+    return validateApiKey(input)
   }
 
   normalize(input: CredentialInput) {
@@ -52,11 +57,8 @@ export class CodexCredentialAdapter implements CredentialAdapter {
     { key: 'apiKey', label: 'OpenAI API Key', type: 'password' as const, placeholder: 'sk-...' },
   ]
 
-  validate(input: CredentialInput) {
-    if (!input.apiKey || input.apiKey.trim().length < 10) {
-      return { valid: false, message: 'API Key 형식이 올바르지 않습니다' }
-    }
-    return { valid: true }
+  validate(input: unknown) {
+    return validateApiKey(input)
   }
 
   normalize(input: CredentialInput) {
@@ -66,4 +68,8 @@ export class CodexCredentialAdapter implements CredentialAdapter {
 
 export function getCredentialAdapter(providerKey: 'claude' | 'codex'): CredentialAdapter {
   return providerKey === 'claude' ? new ClaudeCredentialAdapter() : new CodexCredentialAdapter()
+}
+
+export function selectLLMCredential(storedConfigured: boolean, storedApiKey: string | null, envApiKey?: string): string | null {
+  return storedConfigured ? storedApiKey : envApiKey || null
 }

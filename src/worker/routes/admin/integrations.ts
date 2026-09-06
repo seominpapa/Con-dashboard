@@ -5,6 +5,7 @@ import { getAuthSecretFromEnv } from '../../auth/session'
 import { ok, fail } from '../../../shared/types/common'
 import { PUBLIC_API_PROVIDERS, type PublicApiProviderKey } from '../../../shared/types/integration'
 import type { Site } from '../../../shared/types/site'
+import { publicProviderFailureMessage, validatePublicCredential } from '../../integrations/publicCredentials'
 
 const app = new Hono<AppEnv>()
 
@@ -33,57 +34,66 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   naver: ['NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET'],
 }
 
-/** 실제 Provider를 통해 최소 호출을 수행하여 연결이 유효한지 확인한다 */
-async function testPublicProvider(env: any, provider: PublicApiProviderKey): Promise<{ ok: boolean; message?: string }> {
+function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKey): Record<string, string> | null {
+  if (provider === 'naver') {
+    return env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET
+      ? { clientId: env.NAVER_CLIENT_ID, clientSecret: env.NAVER_CLIENT_SECRET }
+      : null
+  }
+  const value = env[ENV_VAR_MAP[provider][0] as keyof AppEnv['Bindings']]
+  return typeof value === 'string' && value ? { apiKey: value } : null
+}
+
+/** 폴백 없이 지정된 자격증명 자체로 최소 호출을 수행한다. */
+async function testPublicCredential(provider: PublicApiProviderKey, credential: Record<string, string>): Promise<{ ok: boolean; message?: string }> {
   try {
     switch (provider) {
       case 'kma': {
-        const { getWeatherProvider } = await import('../../providers/weather')
-        const p = await getWeatherProvider(env)
+        const { KmaWeatherProvider } = await import('../../providers/weather/KmaWeatherProvider')
+        const p = new KmaWeatherProvider(credential.apiKey)
         await p.getCurrentWeather(TEST_SITE)
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
       case 'airkorea': {
-        const { getAirQualityProvider } = await import('../../providers/air-quality')
-        const p = await getAirQualityProvider(env)
+        const { AirKoreaProvider } = await import('../../providers/air-quality/AirKoreaProvider')
+        const p = new AirKoreaProvider(credential.apiKey)
         await p.getCurrentAirQuality(TEST_SITE)
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
       case 'g2b': {
-        const { getBidProvider } = await import('../../providers/bidding')
-        const p = await getBidProvider(env)
+        const { G2bBidProvider } = await import('../../providers/bidding/G2bBidProvider')
+        const p = new G2bBidProvider(credential.apiKey)
         await p.searchBids({}, 1)
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
       case 'law': {
-        const { getLawProvider } = await import('../../providers/laws')
-        const p = await getLawProvider(env)
+        const { NlicLawProvider } = await import('../../providers/laws/NlicLawProvider')
+        const p = new NlicLawProvider(credential.apiKey)
         await p.getLaws(['건설산업기본법'])
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
       case 'ecos': {
-        const { getExchangeRateProvider } = await import('../../providers/exchange')
-        const p = await getExchangeRateProvider(env)
+        const { EcosExchangeRateProvider } = await import('../../providers/exchange/EcosExchangeRateProvider')
+        const p = new EcosExchangeRateProvider(credential.apiKey)
         await p.getRates(['USD'])
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
       case 'opinet': {
-        const { getOilPriceProvider } = await import('../../providers/oil')
-        const p = await getOilPriceProvider(env)
+        const { OpinetOilPriceProvider } = await import('../../providers/oil/OpinetOilPriceProvider')
+        const p = new OpinetOilPriceProvider(credential.apiKey)
         await p.getPrices(['domestic-diesel'])
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
       case 'naver': {
-        const { getNewsProvider } = await import('../../providers/news')
-        const p = await getNewsProvider(env)
+        const { NaverNewsProvider } = await import('../../providers/news/NaverNewsProvider')
+        const p = new NaverNewsProvider(credential.clientId, credential.clientSecret)
         await p.getNews([], 1)
-        return { ok: true, message: `연결 확인 완료 (source: ${p.source})` }
+        break
       }
-      default:
-        return { ok: false, message: '알 수 없는 provider' }
     }
-  } catch (err: any) {
-    return { ok: false, message: err.message }
+    return { ok: true, message: '실제 API 연결 확인 완료' }
+  } catch {
+    return { ok: false, message: publicProviderFailureMessage(provider) }
   }
 }
 
@@ -120,16 +130,15 @@ app.post('/:provider/connect', async (c) => {
   if (!meta) return c.json(fail('알 수 없는 provider', 'live'), 400)
 
   const body = await c.req.json().catch(() => ({}))
-  const credential = body.credential ?? {}
-  if (Object.keys(credential).length === 0) {
-    return c.json(fail('credential 값이 필요합니다', 'live'), 400)
-  }
+  const validation = validatePublicCredential(provider, body.credential)
+  if (!validation.valid) return c.json(fail(validation.message, 'live'), 400)
+
+  const testResult = await testPublicCredential(provider, validation.credential)
+  if (!testResult.ok) return c.json(fail(testResult.message ?? '외부 API 연결에 실패했습니다', 'live'), 400)
 
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
-  await repo.upsertCredential({ provider, type: 'public_api', credential, updatedBy: admin.id })
-
-  const testResult = await testPublicProvider(c.env, provider)
-  await repo.recordCheckResult(provider, testResult.ok, testResult.ok ? undefined : testResult.message)
+  await repo.upsertCredential({ provider, type: 'public_api', credential: validation.credential, updatedBy: admin.id })
+  await repo.recordCheckResult(provider, true)
 
   return c.json(ok({ provider, testResult }, 'live'))
 })
@@ -141,7 +150,17 @@ app.post('/:provider/test', async (c) => {
   if (!meta) return c.json(fail('알 수 없는 provider', 'live'), 400)
 
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
-  const testResult = await testPublicProvider(c.env, provider)
+  let stored: Record<string, string> | null = null
+  try {
+    stored = await repo.getDecryptedCredential<Record<string, string>>(provider)
+  } catch {
+    return c.json(fail('저장된 자격증명을 복호화할 수 없습니다. 다시 연결해 주세요.', 'live'), 400)
+  }
+  const validation = validatePublicCredential(provider, stored ?? getEnvCredential(c.env, provider))
+  if (!validation.valid) return c.json(fail('연결된 자격증명이 없습니다', 'live'), 400)
+
+  const testResult = await testPublicCredential(provider, validation.credential)
+  await repo.ensureRow(provider, 'public_api')
   await repo.recordCheckResult(provider, testResult.ok, testResult.ok ? undefined : testResult.message)
   return c.json(ok({ provider, testResult }, 'live'))
 })
@@ -150,6 +169,7 @@ app.post('/:provider/test', async (c) => {
 app.post('/:provider/disconnect', async (c) => {
   const admin = c.get('currentUser')!
   const provider = c.req.param('provider') as PublicApiProviderKey
+  if (!PUBLIC_API_PROVIDERS.some((item) => item.key === provider)) return c.json(fail('알 수 없는 provider', 'live'), 400)
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
   await repo.disconnect(provider, admin.id)
   return c.json(ok({ provider }, 'live'))

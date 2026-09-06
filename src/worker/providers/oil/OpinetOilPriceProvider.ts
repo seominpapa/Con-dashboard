@@ -3,7 +3,7 @@ import type { OilPriceItem, OilKind, TrendDirection } from '../../../shared/type
 import { OIL_KIND_LABEL } from '../../../shared/types/market'
 
 /** 한국석유공사 Opinet API (국내 유가) */
-const OPINET_BASE = 'http://www.opinet.co.kr/api'
+const OPINET_BASE = 'https://www.opinet.co.kr/api'
 
 // Opinet 국내 평균가 (경유=D047, 휘발유=B027)
 const OPINET_PRODCD: Record<string, string> = {

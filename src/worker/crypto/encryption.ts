@@ -53,6 +53,9 @@ export async function decryptCredential(stored: string, secret: string): Promise
 }
 
 export function getAuthSecret(env: { AUTH_SECRET?: string }): string {
-  // 개발환경 기본값 (운영 배포 전 반드시 AUTH_SECRET 환경변수로 교체해야 함)
-  return env.AUTH_SECRET || 'dev-only-insecure-default-secret-change-me'
+  const secret = env.AUTH_SECRET?.trim()
+  if (!secret || secret.length < 32 || secret === 'change-me-to-a-long-random-secret') {
+    throw new Error('AUTH_SECRET은 32자 이상의 임의 문자열로 설정해야 합니다')
+  }
+  return secret
 }

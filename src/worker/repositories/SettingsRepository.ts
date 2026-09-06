@@ -16,6 +16,10 @@ export class SettingsRepository {
       .bind(key, value, new Date().toISOString())
       .run()
   }
+
+  async delete(key: string): Promise<void> {
+    await this.db.prepare('DELETE FROM app_settings WHERE key = ?').bind(key).run()
+  }
 }
 
 export const SETTINGS_KEY = {

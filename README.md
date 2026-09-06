@@ -130,6 +130,5 @@ pm2 start ecosystem.config.cjs
 curl http://localhost:3000
 ```
 
-환경변수는 `.env.example`을 참고해 `.dev.vars`로 복사 후 채워주세요 (모두 선택사항이며,
-비워두면 Mock 데이터로 정상 동작합니다).
-
+환경변수는 `.env.example`을 참고해 `.dev.vars`로 복사 후 채워주세요. Google OAuth와
+`AUTH_SECRET`은 로그인에 필수이며, 공개데이터/LLM 키는 비워두면 Mock 또는 준비 중 상태로 동작합니다.

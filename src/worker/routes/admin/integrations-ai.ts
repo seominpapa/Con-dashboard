@@ -4,7 +4,7 @@ import { IntegrationRepository } from '../../repositories/IntegrationRepository'
 import { SettingsRepository, SETTINGS_KEY } from '../../repositories/SettingsRepository'
 import { getAuthSecretFromEnv } from '../../auth/session'
 import { getCredentialAdapter } from '../../llm/CredentialAdapter'
-import { getLLMProvider, type LLMProviderKey } from '../../llm'
+import { createLLMProvider, getLLMProvider, type LLMProviderKey } from '../../llm'
 import { AI_PROVIDERS } from '../../../shared/types/integration'
 import { ok, fail } from '../../../shared/types/common'
 
@@ -49,14 +49,13 @@ app.post('/:provider/connect', async (c) => {
   if (!validation.valid) return c.json(fail(validation.message ?? '입력값이 올바르지 않습니다', 'live'), 400)
   const normalized = adapter.normalize(body)
 
+  const provider = createLLMProvider(providerKey, normalized.apiKey)
+  const health = await provider.healthCheck()
+  if (!health.ok) return c.json(fail(health.message ?? 'LLM Provider 연결에 실패했습니다', 'live'), 400)
+
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
   await repo.upsertCredential({ provider: providerKey, type: 'ai_provider', credential: normalized, updatedBy: admin.id })
-
-  // 저장 직후 실제 healthCheck로 유효성 확인 (기획 33번 "연결 테스트")
-  const provider = await getLLMProvider(c.env, providerKey)
-  const health = provider ? await provider.healthCheck() : { ok: false, message: 'Provider 생성 실패' }
-  await repo.recordCheckResult(providerKey, health.ok, health.ok ? undefined : health.message)
-
+  await repo.recordCheckResult(providerKey, true)
   return c.json(ok({ provider: providerKey, health }, 'live'))
 })
 
@@ -68,6 +67,7 @@ app.post('/:provider/test', async (c) => {
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
   const provider = await getLLMProvider(c.env, providerKey)
   const health = provider ? await provider.healthCheck() : { ok: false, message: 'Provider가 연결되어 있지 않습니다' }
+  await repo.ensureRow(providerKey, 'ai_provider')
   await repo.recordCheckResult(providerKey, health.ok, health.ok ? undefined : health.message)
   return c.json(ok({ provider: providerKey, health }, 'live'))
 })
@@ -76,8 +76,13 @@ app.post('/:provider/test', async (c) => {
 app.post('/:provider/disconnect', async (c) => {
   const admin = c.get('currentUser')!
   const providerKey = c.req.param('provider') as LLMProviderKey
+  if (providerKey !== 'claude' && providerKey !== 'codex') return c.json(fail('알 수 없는 provider', 'live'), 400)
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
   await repo.disconnect(providerKey, admin.id)
+  const settingsRepo = new SettingsRepository(c.env.DB)
+  if ((await settingsRepo.get(SETTINGS_KEY.DEFAULT_LLM_PROVIDER)) === providerKey) {
+    await settingsRepo.delete(SETTINGS_KEY.DEFAULT_LLM_PROVIDER)
+  }
   return c.json(ok({ provider: providerKey }, 'live'))
 })
 
@@ -85,6 +90,7 @@ app.post('/:provider/disconnect', async (c) => {
 app.put('/default', async (c) => {
   const { provider } = await c.req.json()
   if (provider !== 'claude' && provider !== 'codex') return c.json(fail('알 수 없는 provider', 'live'), 400)
+  if (!(await getLLMProvider(c.env, provider))) return c.json(fail('먼저 Provider를 연결해 주세요', 'live'), 400)
   const settingsRepo = new SettingsRepository(c.env.DB)
   await settingsRepo.set(SETTINGS_KEY.DEFAULT_LLM_PROVIDER, provider)
   return c.json(ok({ defaultProvider: provider }, 'live'))

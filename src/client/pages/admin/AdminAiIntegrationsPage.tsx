@@ -33,10 +33,12 @@ export function AdminAiIntegrationsPage() {
   const [editing, setEditing] = useState<AiRow | null>(null)
   const [apiKey, setApiKey] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
     const res = await api.get<{ providers: AiRow[]; defaultProvider: string | null }>('/api/admin/integrations/ai')
+    setError(res.status === 'error' ? res.message ?? 'LLM 연동 정보를 불러오지 못했습니다' : null)
     setRows(res.data?.providers ?? [])
     setDefaultProvider(res.data?.defaultProvider ?? null)
     setLoading(false)
@@ -49,30 +51,42 @@ export function AdminAiIntegrationsPage() {
   async function handleConnect() {
     if (!editing) return
     setBusy(editing.provider)
-    await api.post(`/api/admin/integrations/ai/${editing.provider}/connect`, { apiKey })
+    setError(null)
+    const res = await api.post(`/api/admin/integrations/ai/${editing.provider}/connect`, { apiKey })
     setBusy(null)
+    if (res.status === 'error') {
+      setError(res.message ?? 'LLM Provider 연결에 실패했습니다')
+      return
+    }
     setEditing(null)
     setApiKey('')
-    load()
+    await load()
   }
 
   async function handleTest(provider: string) {
     setBusy(provider)
-    await api.post(`/api/admin/integrations/ai/${provider}/test`)
+    setError(null)
+    const res = await api.post<{ health: { ok: boolean; message?: string } }>(`/api/admin/integrations/ai/${provider}/test`)
     setBusy(null)
-    load()
+    await load()
+    if (res.status === 'error') setError(res.message ?? '연결 테스트에 실패했습니다')
+    else if (res.data && !res.data.health.ok) setError(res.data.health.message ?? '연결 테스트에 실패했습니다')
   }
 
   async function handleDisconnect(provider: string) {
     setBusy(provider)
-    await api.post(`/api/admin/integrations/ai/${provider}/disconnect`)
+    setError(null)
+    const res = await api.post(`/api/admin/integrations/ai/${provider}/disconnect`)
     setBusy(null)
-    load()
+    await load()
+    if (res.status === 'error') setError(res.message ?? '연결 해제에 실패했습니다')
   }
 
   async function handleSetDefault(provider: string) {
-    await api.put('/api/admin/integrations/ai/default', { provider })
-    load()
+    setError(null)
+    const res = await api.put('/api/admin/integrations/ai/default', { provider })
+    await load()
+    if (res.status === 'error') setError(res.message ?? '기본 Provider 설정에 실패했습니다')
   }
 
   if (loading) return <p className="text-sm text-slate-400">불러오는 중...</p>
@@ -83,8 +97,9 @@ export function AdminAiIntegrationsPage() {
         <Bot size={15} /> LLM Provider (AI 브리핑)
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        Claude 또는 Codex/OpenAI 공식 API Key로만 연동할 수 있습니다. 선택한 기본 Provider는 승인된 모든 사용자의 AI 브리핑에 공통으로 사용됩니다.
+        관리자 로그인용 Google OAuth는 Cloudflare의 <code>GOOGLE_CLIENT_ID</code>·<code>GOOGLE_CLIENT_SECRET</code>로 설정합니다. 이 화면에서는 Anthropic/OpenAI 공식 API Key를 등록하고 AI 브리핑의 기본 Provider를 선택합니다.
       </p>
+      {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
         {rows.map((r) => {
           const meta = STATUS_META[r.status]
@@ -144,8 +159,9 @@ export function AdminAiIntegrationsPage() {
             />
           </div>
           <p className="text-[11px] text-slate-400">
-            공식 API Key 인증만 지원합니다. CLI 로그인(OAuth) 방식의 자격증명은 사용할 수 없습니다. 저장 즉시 헬스체크가 수행됩니다.
+            모델 제공사의 공식 API Key만 입력하세요. CLI 로그인용 OAuth 자격증명은 서버 API 호출에 사용할 수 없으며, 저장 전 실제 연결을 확인합니다.
           </p>
+          {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <button
             onClick={handleConnect}
             disabled={!apiKey || busy === editing?.provider}

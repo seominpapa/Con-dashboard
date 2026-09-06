@@ -2,7 +2,7 @@ import type { BidProvider } from './BidProvider'
 import type { BidNotice, BidFilter } from '../../../shared/types/bidding'
 
 // 조달청 나라장터 공사입찰공고 목록 (공사입찰정보서비스)
-const BASE_URL = 'http://apis.data.go.kr/1230000/ad/BidPublicInfoService'
+const BASE_URL = 'https://apis.data.go.kr/1230000/ad/BidPublicInfoService'
 
 export class G2bBidProvider implements BidProvider {
   readonly source = 'live' as const

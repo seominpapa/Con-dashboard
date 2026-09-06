@@ -4,8 +4,13 @@ import { ClaudeProvider } from './ClaudeProvider'
 import { CodexProvider } from './CodexProvider'
 import { IntegrationRepository } from '../repositories/IntegrationRepository'
 import { getAuthSecretFromEnv } from '../auth/session'
+import { selectLLMCredential } from './CredentialAdapter'
 
 export type LLMProviderKey = 'claude' | 'codex'
+
+export function createLLMProvider(providerKey: LLMProviderKey, apiKey: string): LLMProvider {
+  return providerKey === 'claude' ? new ClaudeProvider(apiKey) : new CodexProvider(apiKey)
+}
 
 /**
  * LLM Provider 인스턴스 생성 (관리자 DB 연결 우선, ENV 폴백)
@@ -13,13 +18,25 @@ export type LLMProviderKey = 'claude' | 'codex'
  * 즉시 사용 가능해진다 (기획 53번 - DB 우선 조회).
  */
 export async function getLLMProvider(env: Bindings, providerKey: LLMProviderKey): Promise<LLMProvider | null> {
-  const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
-  const dbCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>(providerKey)
+  let storedConfigured = false
+  let storedApiKey: string | null = null
+  try {
+    const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
+    const summary = await integrationRepo.getSummary(providerKey)
+    storedConfigured = Boolean(summary?.connectedAt && summary.status !== 'DISCONNECTED')
+    if (storedConfigured) {
+      const credential = await integrationRepo.getDecryptedCredential<{ apiKey?: unknown }>(providerKey)
+      storedApiKey = typeof credential?.apiKey === 'string' && credential.apiKey ? credential.apiKey : null
+    }
+  } catch {
+    return null
+  }
 
-  const apiKey = dbCred?.apiKey || (providerKey === 'claude' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY)
+  const envApiKey = providerKey === 'claude' ? env.ANTHROPIC_API_KEY : env.OPENAI_API_KEY
+  const apiKey = selectLLMCredential(storedConfigured, storedApiKey, envApiKey)
   if (!apiKey) return null
 
-  return providerKey === 'claude' ? new ClaudeProvider(apiKey) : new CodexProvider(apiKey)
+  return createLLMProvider(providerKey, apiKey)
 }
 
 /** 관리자가 지정한 기본 Provider를 가져온다. 없으면 연결된 Provider 중 하나를 자동 선택 */
