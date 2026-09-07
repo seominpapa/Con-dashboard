@@ -19,14 +19,15 @@ function vworldError(json: any, fallback: string): VWorldApiError | null {
   const code = json?.response?.error?.code
   if (code === 'INVALID_KEY') return new VWorldApiError('VWorld 인증키가 유효하지 않습니다. 인증키를 다시 확인해 주세요')
   if (code === 'INVALID_DOMAIN') return new VWorldApiError('VWorld 인증키에 등록된 서비스 URL이 현재 사이트 주소와 일치하지 않습니다')
-  return new VWorldApiError(fallback)
+  return new VWorldApiError(code === 'SYSTEM_ERROR' ? `${fallback} (오류 코드: SYSTEM_ERROR)` : fallback)
 }
 
 async function readVWorldResponse(res: Response, fallback: string): Promise<any> {
   const json = await res.json().catch(() => null)
   const error = json && vworldError(json, fallback)
   if (error) throw error
-  if (!res.ok || !json) throw new VWorldApiError(fallback)
+  if (!res.ok) throw new VWorldApiError(`${fallback} (HTTP ${res.status})`)
+  if (!json) throw new VWorldApiError(`${fallback} (응답 형식 오류)`)
   return json
 }
 

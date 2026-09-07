@@ -192,17 +192,75 @@ test('VWorld maps a structured domain error even when the HTTP status is not suc
   }
 })
 
-test('VWorld unknown API errors use a safe fallback message', async () => {
+test('VWorld errors expose only an allowlisted diagnostic code', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response(JSON.stringify({
-    response: { status: 'ERROR', error: { code: 'UNKNOWN', text: 'internal upstream detail' } },
+    response: { status: 'ERROR', error: { code: 'SYSTEM_ERROR', text: 'internal upstream detail' } },
+  }))
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider('secret-key-should-not-leak').geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.match(error.message, /SYSTEM_ERROR/)
+        assert.doesNotMatch(error.message, /internal upstream detail/)
+        assert.doesNotMatch(error.message, /secret-key-should-not-leak/)
+        return true
+      },
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld errors never expose an API key echoed as the error code', async () => {
+  const originalFetch = globalThis.fetch
+  const submittedValue = 'UPSTREAM-ECHO-TEST'
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    response: { status: 'ERROR', error: { code: submittedValue, text: 'internal upstream detail' } },
+  }))
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider(submittedValue).geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.doesNotMatch(error.message, new RegExp(submittedValue))
+        assert.doesNotMatch(error.message, /internal upstream detail/)
+        return true
+      },
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld errors do not expose a non-allowlisted error code', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    response: { status: 'ERROR', error: { code: 'UPSTREAM_TIMEOUT-42', text: 'internal upstream detail' } },
   }))
   try {
     await assert.rejects(
       () => new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
       (error) => {
-        assert.equal(error.message, 'VWorld 주소 좌표 변환에 실패했습니다')
+        assert.doesNotMatch(error.message, /UPSTREAM_TIMEOUT-42/)
         assert.doesNotMatch(error.message, /internal upstream detail/)
+        return true
+      },
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld non-JSON HTTP errors expose only the HTTP status', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('upstream body must not be exposed', { status: 502 })
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider('secret-key-should-not-leak').geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.match(error.message, /HTTP 502/)
+        assert.doesNotMatch(error.message, /upstream body/)
+        assert.doesNotMatch(error.message, /secret-key-should-not-leak/)
         return true
       },
     )
