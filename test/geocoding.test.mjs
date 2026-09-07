@@ -31,7 +31,7 @@ test('VWorld geocoding is wired into site creation and admin integration metadat
   assert.match(sitesRoute, /body\.address !== existing\.address/)
   assert.match(sitesRoute, /err instanceof VWorldApiError/)
   assert.match(adminIntegrationsRoute, /provider === 'vworld' \? new URL/)
-  assert.match(wranglerConfig, /"APP_BASE_URL": "https:\/\/construction-dashboard-2z9\.pages\.dev"/)
+  assert.doesNotMatch(wranglerConfig, /"vars"\s*:\s*\{[^}]*"APP_BASE_URL"/s)
 
   const sitesPage = read('src/client/pages/SitesPage.tsx')
   assert.doesNotMatch(sitesPage, /placeholder="위도/)

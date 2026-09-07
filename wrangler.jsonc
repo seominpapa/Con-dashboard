@@ -12,10 +12,7 @@
       "database_name": "construction-dashboard-production",
       "database_id": "b54cc6a4-084a-4f07-b9e1-bbd159cacc84"
     }
-  ],
-  "vars": {
-    "APP_BASE_URL": "https://construction-dashboard-2z9.pages.dev"
-  }
+  ]
   // "kv_namespaces": [
   //   {
   //     "binding": "MY_KV_NAMESPACE",
