@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
 import { getWeatherProvider } from '../providers/weather'
+import { SiteRepository } from '../repositories/SiteRepository'
 import { withCache, CACHE_TTL, cacheGetStale } from '../cache/memoryCache'
 import { ok, fail } from '../../shared/types/common'
 import type { Site } from '../../shared/types/site'
@@ -8,34 +9,17 @@ import { evaluateConstructionWeatherRisk, WEATHER_RISK_DISCLAIMER } from '../../
 
 const app = new Hono<AppEnv>()
 
-function siteFromQuery(c: any): Site | null {
-  const id = c.req.query('siteId')
-  const name = c.req.query('siteName')
-  const address = c.req.query('address')
-  const nx = c.req.query('nx')
-  const ny = c.req.query('ny')
-  const lat = c.req.query('lat')
-  const lon = c.req.query('lon')
-  if (!id || !nx || !ny) return null
-  return {
-    id,
-    name: name ?? id,
-    company: '',
-    address: address ?? '',
-    latitude: Number(lat ?? 0),
-    longitude: Number(lon ?? 0),
-    kmaNx: Number(nx),
-    kmaNy: Number(ny),
-    startDate: '',
-    endDate: '',
-    status: 'active',
-  }
+async function getSite(c: any): Promise<Site | null> {
+  const user = c.get('currentUser')!
+  const siteId = c.req.query('siteId')
+  if (!siteId) return null
+  return new SiteRepository(c.env.DB).findById(user.id, siteId)
 }
 
-// GET /api/weather?siteId=..&siteName=..&address=..&nx=..&ny=..
+// GET /api/weather?siteId=..
 app.get('/', async (c) => {
-  const site = siteFromQuery(c)
-  if (!site) return c.json(fail('필수 파라미터(siteId, nx, ny)가 누락되었습니다', 'live'), 400)
+  const site = await getSite(c)
+  if (!site) return c.json(fail('현장을 찾을 수 없습니다', 'live'), 404)
 
   const cacheKey = `weather:${site.id}:${site.kmaNx}:${site.kmaNy}`
   try {
@@ -62,10 +46,10 @@ app.get('/', async (c) => {
   }
 })
 
-// GET /api/weather/alerts?siteId=..&nx=..&ny=..&address=..
+// GET /api/weather/alerts?siteId=..
 app.get('/alerts', async (c) => {
-  const site = siteFromQuery(c)
-  if (!site) return c.json(fail('필수 파라미터가 누락되었습니다', 'live'), 400)
+  const site = await getSite(c)
+  if (!site) return c.json(fail('현장을 찾을 수 없습니다', 'live'), 404)
 
   const cacheKey = `weather-alert:${site.id}:${site.address}`
   try {

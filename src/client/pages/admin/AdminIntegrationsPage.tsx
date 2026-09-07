@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plug, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Plug, CheckCircle2, XCircle, AlertCircle, Loader2, ExternalLink } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
@@ -14,6 +14,7 @@ interface IntegrationRow {
   lastError: string | null
   envFallbackAvailable: boolean
   dbConfigured: boolean
+  docsUrl?: string
 }
 
 const STATUS_META: Record<IntegrationRow['status'], { label: string; icon: any; cls: string }> = {
@@ -101,7 +102,7 @@ export function AdminIntegrationsPage() {
         <Plug size={15} /> 공개 데이터 API 연결 센터
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        관리자 로그인용 Google OAuth는 Cloudflare의 <code>GOOGLE_CLIENT_ID</code>·<code>GOOGLE_CLIENT_SECRET</code>로 설정합니다. 이 화면에서는 공개데이터 제공사의 API Key/Client ID를 등록하며, 값은 암호화되어 저장됩니다.
+        관리자 로그인은 <strong>OAuth 인증</strong> 메뉴에서, 공개데이터 제공사의 API Key/Client ID는 이 화면에서 설정합니다. 입력값은 암호화되어 저장됩니다.
       </p>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
@@ -164,6 +165,11 @@ export function AdminIntegrationsPage() {
               </div>
             ))}
           <p className="text-[11px] text-slate-400">저장 즉시 실제 연결 테스트가 수행됩니다. 값은 암호화되어 저장되며 이후 다시 조회할 수 없습니다.</p>
+          {editing?.docsUrl && (
+            <a href={editing.docsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
+              API Key 발급 사이트 <ExternalLink size={12} />
+            </a>
+          )}
           {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <button
             onClick={handleConnect}

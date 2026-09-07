@@ -32,6 +32,7 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   ecos: ['ECOS_API_KEY'],
   opinet: ['OPINET_API_KEY'],
   naver: ['NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET'],
+  vworld: ['VWORLD_API_KEY'],
 }
 
 function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKey): Record<string, string> | null {
@@ -90,6 +91,12 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         await p.getNews([], 1)
         break
       }
+      case 'vworld': {
+        const { VWorldGeocodingProvider } = await import('../../providers/geocoding/VWorldGeocodingProvider')
+        const p = new VWorldGeocodingProvider(credential.apiKey)
+        await p.geocode(TEST_SITE.address)
+        break
+      }
     }
     return { ok: true, message: '실제 API 연결 확인 완료' }
   } catch {
@@ -110,6 +117,7 @@ app.get('/', async (c) => {
       provider: p.key,
       label: p.label,
       envVar: p.envVar,
+      docsUrl: p.docsUrl,
       status: summary?.status ?? (envFallbackAvailable ? 'CONNECTED' : 'DISCONNECTED'),
       connectedAt: summary?.connectedAt ?? null,
       lastCheckedAt: summary?.lastCheckedAt ?? null,

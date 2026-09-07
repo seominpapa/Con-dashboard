@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import { Bot, CheckCircle2, XCircle, AlertCircle, ExternalLink } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
@@ -20,6 +20,11 @@ const STATUS_META: Record<AiRow['status'], { label: string; icon: any; cls: stri
   EXPIRED: { label: '만료', icon: AlertCircle, cls: 'text-amber-500' },
   CHECKING: { label: '확인 중', icon: AlertCircle, cls: 'text-slate-400' },
 }
+
+const API_KEY_URL = {
+  claude: 'https://platform.claude.com/settings/keys',
+  codex: 'https://platform.openai.com/api-keys',
+} as const
 
 /**
  * LLM Provider 관리 (기획 33, 52번): Claude / Codex(OpenAI) 공식 API Key 연동만
@@ -97,7 +102,7 @@ export function AdminAiIntegrationsPage() {
         <Bot size={15} /> LLM Provider (AI 브리핑)
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        관리자 로그인용 Google OAuth는 Cloudflare의 <code>GOOGLE_CLIENT_ID</code>·<code>GOOGLE_CLIENT_SECRET</code>로 설정합니다. 이 화면에서는 Anthropic/OpenAI 공식 API Key를 등록하고 AI 브리핑의 기본 Provider를 선택합니다.
+        이 화면에서는 Anthropic/OpenAI 공식 API Key를 등록하고 AI 브리핑의 기본 Provider를 선택합니다. 관리자 로그인은 <strong>OAuth 인증</strong> 메뉴에서 설정합니다.
       </p>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
@@ -161,6 +166,11 @@ export function AdminAiIntegrationsPage() {
           <p className="text-[11px] text-slate-400">
             모델 제공사의 공식 API Key만 입력하세요. CLI 로그인용 OAuth 자격증명은 서버 API 호출에 사용할 수 없으며, 저장 전 실제 연결을 확인합니다.
           </p>
+          {editing && (
+            <a href={API_KEY_URL[editing.provider]} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
+              API Key 발급 사이트 <ExternalLink size={12} />
+            </a>
+          )}
           {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <button
             onClick={handleConnect}

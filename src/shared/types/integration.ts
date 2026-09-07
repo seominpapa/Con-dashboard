@@ -1,9 +1,9 @@
 /** 관리자 API 연결센터 도메인 모델 (기획 33~34, 52) */
 
 export type IntegrationStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'EXPIRED' | 'CHECKING'
-export type IntegrationType = 'public_api' | 'ai_provider'
+export type IntegrationType = 'public_api' | 'ai_provider' | 'auth_provider'
 
-export type PublicApiProviderKey = 'kma' | 'airkorea' | 'g2b' | 'law' | 'ecos' | 'opinet' | 'naver'
+export type PublicApiProviderKey = 'kma' | 'airkorea' | 'g2b' | 'law' | 'ecos' | 'opinet' | 'naver' | 'vworld'
 export type AiProviderKey = 'claude' | 'codex'
 
 export interface IntegrationSummary {
@@ -21,14 +21,15 @@ export interface IntegrationSummary {
   envFallbackAvailable: boolean
 }
 
-export const PUBLIC_API_PROVIDERS: { key: PublicApiProviderKey; label: string; envVar: string }[] = [
-  { key: 'kma', label: '기상청', envVar: 'KMA_SERVICE_KEY' },
-  { key: 'airkorea', label: 'AirKorea', envVar: 'AIRKOREA_SERVICE_KEY' },
-  { key: 'g2b', label: '나라장터', envVar: 'G2B_SERVICE_KEY' },
-  { key: 'law', label: '국가법령정보', envVar: 'LAW_API_KEY' },
-  { key: 'ecos', label: '환율(한국은행 ECOS)', envVar: 'ECOS_API_KEY' },
-  { key: 'opinet', label: '유가(Opinet)', envVar: 'OPINET_API_KEY' },
-  { key: 'naver', label: '네이버 뉴스(보완)', envVar: 'NAVER_CLIENT_ID/SECRET' },
+export const PUBLIC_API_PROVIDERS: { key: PublicApiProviderKey; label: string; envVar: string; docsUrl?: string }[] = [
+  { key: 'kma', label: '기상청', envVar: 'KMA_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15084084/openapi.do' },
+  { key: 'airkorea', label: 'AirKorea', envVar: 'AIRKOREA_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15073861/openapi.do' },
+  { key: 'g2b', label: '나라장터', envVar: 'G2B_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15129394/openapi.do' },
+  { key: 'law', label: '국가법령정보', envVar: 'LAW_API_KEY', docsUrl: 'https://open.law.go.kr/LSO/usrJoin.do' },
+  { key: 'ecos', label: '환율(한국은행 ECOS)', envVar: 'ECOS_API_KEY', docsUrl: 'https://ecos.bok.or.kr/api/' },
+  { key: 'opinet', label: '유가(Opinet)', envVar: 'OPINET_API_KEY', docsUrl: 'https://www.opinet.co.kr/user/custapi/openApiIntro.do' },
+  { key: 'naver', label: '네이버 뉴스(보완)', envVar: 'NAVER_CLIENT_ID/SECRET', docsUrl: 'https://developers.naver.com/apps/#/register' },
+  { key: 'vworld', label: 'VWorld 주소 좌표 변환', envVar: 'VWORLD_API_KEY', docsUrl: 'https://www.vworld.kr/dtna/dtna_apiSvcFc_s001.do' },
 ]
 
 export const AI_PROVIDERS: { key: AiProviderKey; label: string }[] = [

@@ -15,6 +15,8 @@ export interface Bindings {
   DISABLE_ADMIN_BOOTSTRAP?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
+  /** true면 관리자 등록 OAuth보다 Cloudflare 환경변수를 강제로 우선 사용 */
+  FORCE_ENV_GOOGLE_OAUTH?: string
   /** OAuth Redirect에 사용할 서비스 기준 URL (예: https://xxx.pages.dev) */
   APP_BASE_URL?: string
 
@@ -27,6 +29,7 @@ export interface Bindings {
   OPINET_API_KEY?: string
   NAVER_CLIENT_ID?: string
   NAVER_CLIENT_SECRET?: string
+  VWORLD_API_KEY?: string
 
   // ---- LLM Provider (관리자가 /admin/integrations/ai 에서 DB로 연결 관리, ENV는 폴백/초기값) ----
   ANTHROPIC_API_KEY?: string

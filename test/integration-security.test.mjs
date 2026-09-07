@@ -13,6 +13,10 @@ import {
 } from '../src/worker/auth/googleOAuth.ts'
 import { formatProviderHttpError } from '../src/worker/llm/LLMProvider.ts'
 import { getCredentialAdapter, selectLLMCredential } from '../src/worker/llm/CredentialAdapter.ts'
+import {
+  selectGoogleOAuthCredential,
+  validateGoogleOAuthCredential,
+} from '../src/worker/auth/googleOAuthCredential.ts'
 
 test('public API credentials require exactly the provider fields', () => {
   assert.deepEqual(validatePublicCredential('kma', { apiKey: '  key-123  ' }), {
@@ -119,4 +123,23 @@ test('LLM credential input rejects malformed or oversized values', () => {
   assert.equal(adapter.validate({ apiKey: 'short' }).valid, false)
   assert.equal(adapter.validate({ apiKey: 'x'.repeat(4097) }).valid, false)
   assert.equal(adapter.validate(validInput).valid, true)
+})
+
+test('Google OAuth credentials require an official web client id and secret', () => {
+  assert.equal(validateGoogleOAuthCredential(null).valid, false)
+  assert.equal(validateGoogleOAuthCredential({ clientId: 'wrong', clientSecret: 'secret' }).valid, false)
+  assert.equal(validateGoogleOAuthCredential({ clientId: '123.apps.googleusercontent.com' }).valid, false)
+  assert.deepEqual(
+    validateGoogleOAuthCredential({ clientId: ' 123.apps.googleusercontent.com ', clientSecret: ' secret ' }),
+    { valid: true, credential: { clientId: '123.apps.googleusercontent.com', clientSecret: 'secret' } },
+  )
+})
+
+test('Google OAuth keeps environment credentials as a break-glass fallback', () => {
+  const stored = { clientId: 'stored.apps.googleusercontent.com', clientSecret: 'stored-secret' }
+  const env = { clientId: 'env.apps.googleusercontent.com', clientSecret: 'env-secret' }
+  assert.deepEqual(selectGoogleOAuthCredential(false, stored, env), stored)
+  assert.deepEqual(selectGoogleOAuthCredential(false, null, env), env)
+  assert.deepEqual(selectGoogleOAuthCredential(true, stored, env), env)
+  assert.equal(selectGoogleOAuthCredential(true, stored, null), null)
 })

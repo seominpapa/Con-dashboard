@@ -13,6 +13,7 @@ import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminUsersPage } from './pages/admin/AdminUsersPage'
 import { AdminIntegrationsPage } from './pages/admin/AdminIntegrationsPage'
 import { AdminAiIntegrationsPage } from './pages/admin/AdminAiIntegrationsPage'
+import { AdminOAuthPage } from './pages/admin/AdminOAuthPage'
 
 function FullScreenLoader() {
   return <div className="flex h-screen items-center justify-center text-sm text-slate-400">불러오는 중...</div>
@@ -60,6 +61,7 @@ function Gate() {
             <Route index element={<Navigate to="users" replace />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="integrations" element={<AdminIntegrationsPage />} />
+            <Route path="oauth" element={<AdminOAuthPage />} />
             <Route path="integrations/ai" element={<AdminAiIntegrationsPage />} />
           </Route>
         )}

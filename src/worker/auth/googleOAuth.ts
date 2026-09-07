@@ -1,5 +1,7 @@
 import type { Bindings } from '../env'
 
+export type GoogleOAuthBindings = Pick<Bindings, 'GOOGLE_CLIENT_ID' | 'GOOGLE_CLIENT_SECRET'>
+
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
@@ -35,11 +37,11 @@ export function parseGoogleUserInfo(value: unknown): GoogleUserInfo {
   }
 }
 
-export function isGoogleOAuthConfigured(env: Bindings): boolean {
+export function isGoogleOAuthConfigured(env: GoogleOAuthBindings): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
 }
 
-export function buildGoogleAuthUrl(env: Bindings, redirectUri: string, state: string): string {
+export function buildGoogleAuthUrl(env: GoogleOAuthBindings, redirectUri: string, state: string): string {
   const url = new URL(GOOGLE_AUTH_URL)
   url.searchParams.set('client_id', env.GOOGLE_CLIENT_ID!)
   url.searchParams.set('redirect_uri', redirectUri)
@@ -51,7 +53,7 @@ export function buildGoogleAuthUrl(env: Bindings, redirectUri: string, state: st
 }
 
 export async function exchangeCodeForToken(
-  env: Bindings,
+  env: GoogleOAuthBindings,
   code: string,
   redirectUri: string
 ): Promise<{ access_token: string; id_token: string }> {
