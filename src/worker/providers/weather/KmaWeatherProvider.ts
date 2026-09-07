@@ -7,6 +7,7 @@ import type {
   PrecipitationType,
   SkyCondition,
 } from '../../../shared/types/weather'
+import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredentials'
 
 const BASE_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0'
 const WARN_URL = 'https://apis.data.go.kr/1360000/WthrWrnInfoService'
@@ -72,7 +73,11 @@ interface KmaItem {
 
 export class KmaWeatherProvider implements WeatherProvider {
   readonly source = 'live' as const
-  constructor(private serviceKey: string) {}
+  private serviceKey: string
+
+  constructor(serviceKey: string) {
+    this.serviceKey = normalizeDataGoKrServiceKey(serviceKey)
+  }
 
   private async fetchVilageFcst(nx: number, ny: number): Promise<KmaItem[]> {
     const { baseDate, baseTime } = getBaseDateTime()

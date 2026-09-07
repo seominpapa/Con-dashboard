@@ -26,6 +26,16 @@ type CredentialValidation =
   | { valid: true; credential: Record<string, string> }
   | { valid: false; message: string }
 
+/** 공공데이터포털의 인코딩/디코딩 키를 URLSearchParams에서 한 번만 인코딩한다. */
+export function normalizeDataGoKrServiceKey(value: string): string {
+  if (!/%[0-9a-f]{2}/i.test(value)) return value
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
 export function validatePublicCredential(provider: PublicApiProviderKey, input: unknown): CredentialValidation {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { valid: false, message: '자격증명 형식이 올바르지 않습니다' }
@@ -33,7 +43,8 @@ export function validatePublicCredential(provider: PublicApiProviderKey, input: 
 
   const fields = REQUIRED_FIELDS[provider]
   const entries = Object.entries(input as Record<string, unknown>)
-  if (entries.some(([key]) => !fields.includes(key))) {
+  const allowedFields = provider === 'naver' ? [...fields, 'apiType'] : fields
+  if (entries.some(([key]) => !allowedFields.includes(key))) {
     return { valid: false, message: '허용되지 않은 자격증명 필드가 포함되어 있습니다' }
   }
 
@@ -46,9 +57,15 @@ export function validatePublicCredential(provider: PublicApiProviderKey, input: 
     credential[field] = value.trim()
   }
 
+  if (provider === 'naver') {
+    const apiType = (input as Record<string, unknown>).apiType ?? 'legacy'
+    if (apiType !== 'apiHub' && apiType !== 'legacy') return { valid: false, message: '네이버 API 유형이 올바르지 않습니다' }
+    credential.apiType = apiType
+  }
+
   return { valid: true, credential }
 }
 
 export function publicProviderFailureMessage(provider: PublicApiProviderKey): string {
-  return `${FAILURE_LABELS[provider]} API 연결 확인에 실패했습니다`
+  return `${FAILURE_LABELS[provider]} API 연결 확인에 실패했습니다. API 키와 해당 서비스의 활용신청 승인 상태를 확인해 주세요`
 }

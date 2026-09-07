@@ -1,12 +1,17 @@
 import type { BidProvider } from './BidProvider'
 import type { BidNotice, BidFilter } from '../../../shared/types/bidding'
+import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredentials'
 
 // 조달청 나라장터 공사입찰공고 목록 (공사입찰정보서비스)
 const BASE_URL = 'https://apis.data.go.kr/1230000/ad/BidPublicInfoService'
 
 export class G2bBidProvider implements BidProvider {
   readonly source = 'live' as const
-  constructor(private serviceKey: string) {}
+  private serviceKey: string
+
+  constructor(serviceKey: string) {
+    this.serviceKey = normalizeDataGoKrServiceKey(serviceKey)
+  }
 
   async searchBids(filter: Partial<BidFilter>, limit = 5): Promise<BidNotice[]> {
     const now = new Date()
@@ -26,6 +31,7 @@ export class G2bBidProvider implements BidProvider {
     const res = await fetch(url.toString())
     if (!res.ok) throw new Error(`G2B API error: ${res.status}`)
     const json: any = await res.json()
+    if (json?.response?.header?.resultCode !== '00') throw new Error(`G2B API resultCode=${json?.response?.header?.resultCode}`)
     const items = json?.response?.body?.items ?? []
 
     let results: BidNotice[] = items.map((item: any, idx: number) => ({

@@ -64,10 +64,10 @@ API 연동을 관리하는 구조로 설계되었습니다.
 
 ### 관리자 패널 (`/admin`, ADMIN 전용)
 - 사용자 관리: 승인/거절/정지/재승인, 역할 변경 (최후 1인 ADMIN 강제 유지)
-- API 연결 센터: 공공데이터 7종 Provider 연결/테스트/해제, Credential은 AES-GCM 암호화 후 DB
+- API 연결 센터: 공공데이터 8종 Provider 연결/테스트/해제, Credential은 AES-GCM 암호화 후 DB
   저장, 클라이언트로 절대 반환/로그 출력되지 않음
-- LLM Provider 관리: Claude / Codex(OpenAI) 공식 API Key 연결, 기본 Provider 지정 (전체
-  승인 사용자가 공유)
+- LLM Provider 관리: Claude / Codex(OpenAI) 공식 API Key 연결, OpenAI 모델 선택, 기본 Provider 지정
+  (전체 승인 사용자가 공유)
 
 ### AI 브리핑
 - 사용자 대시보드에 배치된 위젯을 기준으로 컨텍스트 자동 산정 (사용자가 직접 범위 설정 불가)

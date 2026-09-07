@@ -3,6 +3,7 @@ import { Bot, CheckCircle2, XCircle, AlertCircle, ExternalLink } from 'lucide-re
 import { api } from '../../lib/api'
 import { Modal } from '../../components/ui/Modal'
 import { cn } from '../../lib/cn'
+import { OPENAI_MODELS } from '../../../shared/types/integration'
 
 interface AiRow {
   provider: 'claude' | 'codex'
@@ -11,6 +12,7 @@ interface AiRow {
   lastError: string | null
   envFallbackAvailable: boolean
   dbConfigured: boolean
+  model: string | null
 }
 
 const STATUS_META: Record<AiRow['status'], { label: string; icon: any; cls: string }> = {
@@ -42,6 +44,7 @@ export function AdminAiIntegrationsPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<AiRow | null>(null)
   const [apiKey, setApiKey] = useState('')
+  const [model, setModel] = useState<string>(OPENAI_MODELS[0])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,7 +65,7 @@ export function AdminAiIntegrationsPage() {
     if (!editing) return
     setBusy(editing.provider)
     setError(null)
-    const res = await api.post(`/api/admin/integrations/ai/${editing.provider}/connect`, { apiKey })
+    const res = await api.post(`/api/admin/integrations/ai/${editing.provider}/connect`, { apiKey, model })
     setBusy(null)
     if (res.status === 'error') {
       setError(res.message ?? 'LLM Provider 연결에 실패했습니다')
@@ -70,6 +73,7 @@ export function AdminAiIntegrationsPage() {
     }
     setEditing(null)
     setApiKey('')
+    setModel(OPENAI_MODELS[0])
     await load()
   }
 
@@ -128,6 +132,7 @@ export function AdminAiIntegrationsPage() {
                 <p className="text-xs text-slate-400">
                   {meta.label}
                   {r.dbConfigured ? ' · 관리자 등록됨' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ' · 미설정'}
+                  {r.provider === 'codex' ? ` · ${r.model ?? OPENAI_MODELS[0]}` : ''}
                   {r.lastError ? ` · ${r.lastError}` : ''}
                 </p>
                 <a
@@ -152,6 +157,7 @@ export function AdminAiIntegrationsPage() {
                   onClick={() => {
                     setEditing(r)
                     setApiKey('')
+                    setModel(r.model ?? OPENAI_MODELS[0])
                   }}
                   className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
                 >
@@ -181,6 +187,19 @@ export function AdminAiIntegrationsPage() {
               onChange={(e) => setApiKey(e.target.value)}
             />
           </div>
+          {editing?.provider === 'codex' && (
+            <div>
+              <label htmlFor="openai-model" className="mb-1 block text-xs font-medium text-slate-500">GPT 모델</label>
+              <select
+                id="openai-model"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+              >
+                {OPENAI_MODELS.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </div>
+          )}
           <p className="text-[11px] text-slate-400">
             모델 제공사의 공식 API Key만 입력하세요. Codex/Claude 구독 로그인 OAuth는 이 서버 배포에서 중계하지 않으며, 저장 전 실제 연결을 확인합니다.
           </p>

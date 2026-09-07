@@ -1,4 +1,5 @@
-import { formatProviderHttpError, type LLMProvider, type LLMMessage, type LLMGenerateOptions, type LLMResult } from './LLMProvider'
+import { formatProviderHttpError, type LLMProvider, type LLMMessage, type LLMGenerateOptions, type LLMResult } from './LLMProvider.ts'
+import { OPENAI_MODELS } from '../../shared/types/integration.ts'
 
 const API_URL = 'https://api.openai.com/v1/chat/completions'
 const DEFAULT_MODEL = 'gpt-5.1'
@@ -10,9 +11,11 @@ const DEFAULT_MODEL = 'gpt-5.1'
 export class CodexProvider implements LLMProvider {
   readonly key = 'codex' as const
   readonly label = 'OpenAI API'
+  private apiKey: string
   private model: string
 
-  constructor(private apiKey: string, model?: string) {
+  constructor(apiKey: string, model?: string) {
+    this.apiKey = apiKey
     this.model = model || DEFAULT_MODEL
   }
 
@@ -20,8 +23,13 @@ export class CodexProvider implements LLMProvider {
     const body: any = {
       model: this.model,
       messages: messages.map((m) => ({ role: m.role === 'system' ? 'developer' : m.role, content: m.content })),
-      temperature: options?.temperature ?? 0.4,
       max_completion_tokens: options?.maxTokens ?? 2000,
+    }
+    if (this.model === 'gpt-5.1' || this.model.startsWith('gpt-5.6')) {
+      body.reasoning_effort = 'none'
+      body.temperature = options?.temperature ?? 0.4
+    } else if (this.model !== 'gpt-5-mini') {
+      body.temperature = options?.temperature ?? 0.4
     }
     if (options?.jsonMode) {
       body.response_format = { type: 'json_object' }
@@ -36,7 +44,10 @@ export class CodexProvider implements LLMProvider {
       body: JSON.stringify(body),
     })
     if (!res.ok) {
-      throw new Error(formatProviderHttpError('OpenAI', res.status))
+      const payload: any = await res.json().catch(() => null)
+      const code = typeof payload?.error?.code === 'string' ? payload.error.code : undefined
+      const param = typeof payload?.error?.param === 'string' ? payload.error.param : undefined
+      throw new Error(formatProviderHttpError('OpenAI', res.status, { code, param }))
     }
     const json: any = await res.json()
     const text = json.choices?.[0]?.message?.content ?? ''
@@ -66,7 +77,7 @@ export class CodexProvider implements LLMProvider {
 
   async healthCheck(): Promise<{ ok: boolean; message?: string }> {
     try {
-      const result = await this.callApi([{ role: 'user', content: 'ping' }], { maxTokens: 8 })
+      const result = await this.callApi([{ role: 'user', content: 'ping' }], { maxTokens: 128 })
       return { ok: true, message: `연결 확인 완료 (model: ${result.model})` }
     } catch (err: any) {
       return { ok: false, message: err.message }
@@ -74,6 +85,6 @@ export class CodexProvider implements LLMProvider {
   }
 
   getAvailableModels(): string[] {
-    return ['gpt-5.1', 'gpt-5.1-mini', 'gpt-4.1']
+    return [...OPENAI_MODELS]
   }
 }

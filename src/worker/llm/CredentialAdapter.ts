@@ -11,7 +11,9 @@
  * - Provider의 공식 인증 흐름(공식 API Key 발급 등)만 사용한다.
  * - 향후 공식 OAuth 지원이 열리면 이 Adapter 내부 구현만 교체하면 되고,
  *   상위 IntegrationService/Route는 변경할 필요가 없다.
- */
+*/
+
+import { OPENAI_MODELS } from '../../shared/types/integration.ts'
 
 export interface CredentialInput {
   /** 관리자가 입력하는 자격증명 필드 (Provider마다 다름) */
@@ -58,11 +60,17 @@ export class CodexCredentialAdapter implements CredentialAdapter {
   ]
 
   validate(input: unknown) {
-    return validateApiKey(input)
+    const apiKeyResult = validateApiKey(input)
+    if (!apiKeyResult.valid) return apiKeyResult
+    const model = (input as Record<string, unknown>).model
+    return model === undefined || (typeof model === 'string' && OPENAI_MODELS.includes(model as (typeof OPENAI_MODELS)[number]))
+      ? { valid: true }
+      : { valid: false, message: '지원하지 않는 OpenAI 모델입니다' }
   }
 
   normalize(input: CredentialInput) {
-    return { apiKey: input.apiKey.trim() }
+    const model = OPENAI_MODELS.includes(input.model as (typeof OPENAI_MODELS)[number]) ? input.model : OPENAI_MODELS[0]
+    return { apiKey: input.apiKey.trim(), model }
   }
 }
 

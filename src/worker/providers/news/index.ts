@@ -40,10 +40,21 @@ class CompositeNewsProvider implements NewsProvider {
 
 export async function getNewsProvider(env: Bindings): Promise<NewsProvider> {
   const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
-  const dbCred = await integrationRepo.getDecryptedCredential<{ clientId: string; clientSecret: string }>('naver').catch(() => null)
-  const clientId = dbCred?.clientId || env.NAVER_CLIENT_ID
-  const clientSecret = dbCred?.clientSecret || env.NAVER_CLIENT_SECRET
-  const naver = clientId && clientSecret ? new NaverNewsProvider(clientId, clientSecret) : undefined
+  let dbCred: { clientId?: unknown; clientSecret?: unknown; apiType?: unknown } | null
+  let credentialUnreadable = false
+  try {
+    dbCred = await integrationRepo.getDecryptedCredential('naver')
+  } catch {
+    dbCred = null
+    credentialUnreadable = true
+  }
+  const storedValid = typeof dbCred?.clientId === 'string' && typeof dbCred?.clientSecret === 'string'
+  const envValid = !credentialUnreadable && !dbCred && Boolean(env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET)
+  const naver = storedValid
+    ? new NaverNewsProvider(dbCred!.clientId as string, dbCred!.clientSecret as string, dbCred!.apiType === 'apiHub' ? 'apiHub' : 'legacy')
+    : envValid
+      ? new NaverNewsProvider(env.NAVER_CLIENT_ID!, env.NAVER_CLIENT_SECRET!, 'legacy')
+      : undefined
   // RSS는 API Key 불필요 -> 항상 시도 가능. Naver는 있으면 보완.
   return new CompositeNewsProvider(new RssNewsProvider(), naver)
 }

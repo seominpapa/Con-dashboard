@@ -17,7 +17,7 @@ export class OpinetOilPriceProvider implements OilPriceProvider {
 
   private async fetchDomestic(kind: 'domestic-diesel' | 'domestic-gasoline'): Promise<OilPriceItem> {
     const url = new URL(`${OPINET_BASE}/avgAllPrice.do`)
-    url.searchParams.set('code', this.apiKey)
+    url.searchParams.set('certkey', this.apiKey)
     url.searchParams.set('out', 'json')
 
     const res = await fetch(url.toString())

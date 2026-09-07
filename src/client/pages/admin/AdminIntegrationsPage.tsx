@@ -131,7 +131,7 @@ export function AdminIntegrationsPage() {
                 <button
                   onClick={() => {
                     setEditing(r)
-                    setCredInputs({})
+                    setCredInputs(r.provider === 'naver' ? { apiType: 'apiHub' } : {})
                   }}
                   className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
                 >
@@ -164,7 +164,24 @@ export function AdminIntegrationsPage() {
                 />
               </div>
             ))}
+          {editing?.provider === 'naver' && (
+            <div>
+              <label htmlFor="naver-api-type" className="mb-1 block text-xs font-medium text-slate-500">API 유형</label>
+              <select
+                id="naver-api-type"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                value={credInputs.apiType ?? 'apiHub'}
+                onChange={(event) => setCredInputs({ ...credInputs, apiType: event.target.value })}
+              >
+                <option value="apiHub">NAVER API HUB (신규)</option>
+                <option value="legacy">Naver Developers (기존 키)</option>
+              </select>
+            </div>
+          )}
           <p className="text-[11px] text-slate-400">저장 즉시 실제 연결 테스트가 수행됩니다. 값은 암호화되어 저장되며 이후 다시 조회할 수 없습니다.</p>
+          {editing && ['kma', 'airkorea', 'g2b'].includes(editing.provider) && (
+            <p className="text-[11px] text-slate-400">공공데이터포털의 인코딩 또는 디코딩 인증키를 모두 사용할 수 있습니다.</p>
+          )}
           {editing?.docsUrl && (
             <a href={editing.docsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
               API Key 발급 사이트 <ExternalLink size={12} />

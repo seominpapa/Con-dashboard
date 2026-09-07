@@ -17,13 +17,16 @@ const CATEGORY_KEYWORD: Record<NewsCategory, string> = {
   해외건설: '해외건설',
 }
 
+const API_HUB_URL = 'https://naverapihub.apigw.ntruss.com/search/v1/news'
+const LEGACY_URL = 'https://openapi.naver.com/v1/search/news.json'
+
 function stripHtml(text: string): string {
   return text.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
 }
 
 export class NaverNewsProvider implements NewsProvider {
   readonly source = 'live' as const
-  constructor(private clientId: string, private clientSecret: string) {}
+  constructor(private clientId: string, private clientSecret: string, private apiType: 'apiHub' | 'legacy' = 'legacy') {}
 
   async getNews(categories: NewsCategory[], limit = 10): Promise<NewsItem[]> {
     const cats = categories.length ? categories : (Object.keys(CATEGORY_KEYWORD) as NewsCategory[])
@@ -31,17 +34,15 @@ export class NaverNewsProvider implements NewsProvider {
 
     const results = await Promise.allSettled(
       cats.map(async (cat) => {
-        const url = new URL('https://openapi.naver.com/v1/search/news.json')
+        const url = new URL(this.apiType === 'apiHub' ? API_HUB_URL : LEGACY_URL)
         url.searchParams.set('query', CATEGORY_KEYWORD[cat])
         url.searchParams.set('display', String(perCat))
         url.searchParams.set('sort', 'date')
 
-        const res = await fetch(url.toString(), {
-          headers: {
-            'X-Naver-Client-Id': this.clientId,
-            'X-Naver-Client-Secret': this.clientSecret,
-          },
-        })
+        const headers: Record<string, string> = this.apiType === 'apiHub'
+          ? { 'X-NCP-APIGW-API-KEY-ID': this.clientId, 'X-NCP-APIGW-API-KEY': this.clientSecret }
+          : { 'X-Naver-Client-Id': this.clientId, 'X-Naver-Client-Secret': this.clientSecret }
+        const res = await fetch(url.toString(), { headers })
         if (!res.ok) throw new Error(`Naver News API error: ${res.status}`)
         const json: any = await res.json()
         const items: NewsItem[] = (json.items ?? []).map((item: any, idx: number) => ({

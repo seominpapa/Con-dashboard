@@ -8,8 +8,8 @@ import { selectLLMCredential } from './CredentialAdapter'
 
 export type LLMProviderKey = 'claude' | 'codex'
 
-export function createLLMProvider(providerKey: LLMProviderKey, apiKey: string): LLMProvider {
-  return providerKey === 'claude' ? new ClaudeProvider(apiKey) : new CodexProvider(apiKey)
+export function createLLMProvider(providerKey: LLMProviderKey, apiKey: string, model?: string): LLMProvider {
+  return providerKey === 'claude' ? new ClaudeProvider(apiKey) : new CodexProvider(apiKey, model)
 }
 
 /**
@@ -20,13 +20,15 @@ export function createLLMProvider(providerKey: LLMProviderKey, apiKey: string): 
 export async function getLLMProvider(env: Bindings, providerKey: LLMProviderKey): Promise<LLMProvider | null> {
   let storedConfigured = false
   let storedApiKey: string | null = null
+  let storedModel: string | undefined
   try {
     const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
     const summary = await integrationRepo.getSummary(providerKey)
     storedConfigured = Boolean(summary?.connectedAt && summary.status !== 'DISCONNECTED')
     if (storedConfigured) {
-      const credential = await integrationRepo.getDecryptedCredential<{ apiKey?: unknown }>(providerKey)
+      const credential = await integrationRepo.getDecryptedCredential<{ apiKey?: unknown; model?: unknown }>(providerKey)
       storedApiKey = typeof credential?.apiKey === 'string' && credential.apiKey ? credential.apiKey : null
+      storedModel = typeof credential?.model === 'string' ? credential.model : undefined
     }
   } catch {
     return null
@@ -36,7 +38,7 @@ export async function getLLMProvider(env: Bindings, providerKey: LLMProviderKey)
   const apiKey = selectLLMCredential(storedConfigured, storedApiKey, envApiKey)
   if (!apiKey) return null
 
-  return createLLMProvider(providerKey, apiKey)
+  return createLLMProvider(providerKey, apiKey, storedModel)
 }
 
 /** 관리자가 지정한 기본 Provider를 가져온다. 없으면 연결된 Provider 중 하나를 자동 선택 */

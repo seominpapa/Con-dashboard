@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { publicProviderFailureMessage, validatePublicCredential } from '../src/worker/integrations/publicCredentials.ts'
+import { normalizeDataGoKrServiceKey, publicProviderFailureMessage, validatePublicCredential } from '../src/worker/integrations/publicCredentials.ts'
 import { isSameOriginMutation } from '../src/worker/security/origin.ts'
 import { decryptCredential, encryptCredential, getAuthSecret } from '../src/worker/crypto/encryption.ts'
 import {
@@ -13,6 +13,7 @@ import {
 } from '../src/worker/auth/googleOAuth.ts'
 import { formatProviderHttpError } from '../src/worker/llm/LLMProvider.ts'
 import { getCredentialAdapter, selectLLMCredential } from '../src/worker/llm/CredentialAdapter.ts'
+import { CodexProvider } from '../src/worker/llm/CodexProvider.ts'
 
 test('public API credentials require exactly the provider fields', () => {
   assert.deepEqual(validatePublicCredential('kma', { apiKey: '  key-123  ' }), {
@@ -21,17 +22,28 @@ test('public API credentials require exactly the provider fields', () => {
   })
   assert.deepEqual(validatePublicCredential('naver', { clientId: 'id', clientSecret: 'secret' }), {
     valid: true,
-    credential: { clientId: 'id', clientSecret: 'secret' },
+    credential: { clientId: 'id', clientSecret: 'secret', apiType: 'legacy' },
   })
+  assert.deepEqual(validatePublicCredential('naver', { clientId: 'id', clientSecret: 'secret', apiType: 'apiHub' }), {
+    valid: true,
+    credential: { clientId: 'id', clientSecret: 'secret', apiType: 'apiHub' },
+  })
+  assert.equal(validatePublicCredential('naver', { clientId: 'id', clientSecret: 'secret', apiType: 'other' }).valid, false)
   assert.equal(validatePublicCredential('naver', { clientId: 'id' }).valid, false)
   assert.equal(validatePublicCredential('law', { apiKey: '   ' }).valid, false)
   assert.equal(validatePublicCredential('kma', { apiKey: 'key', extra: 'unexpected' }).valid, false)
   assert.equal(validatePublicCredential('kma', 'key').valid, false)
 })
 
+test('data.go.kr encoded and decoded service keys are both accepted', () => {
+  assert.equal(normalizeDataGoKrServiceKey('abc%2Bdef%2Fghi%3D'), 'abc+def/ghi=')
+  assert.equal(normalizeDataGoKrServiceKey('abc+def/ghi='), 'abc+def/ghi=')
+  assert.equal(normalizeDataGoKrServiceKey('abc%not-encoded'), 'abc%not-encoded')
+})
+
 test('public provider failures do not expose upstream response details', () => {
-  assert.equal(publicProviderFailureMessage('kma'), '기상청 API 연결 확인에 실패했습니다')
-  assert.equal(publicProviderFailureMessage('naver'), '네이버 뉴스 API 연결 확인에 실패했습니다')
+  assert.match(publicProviderFailureMessage('kma'), /^기상청 API 연결 확인에 실패했습니다/)
+  assert.match(publicProviderFailureMessage('naver'), /^네이버 뉴스 API 연결 확인에 실패했습니다/)
 })
 
 test('cookie-authenticated mutations require the same origin', () => {
@@ -112,6 +124,60 @@ test('LLM errors exposed to admins do not persist upstream response bodies', () 
   assert.equal(formatProviderHttpError('OpenAI', 400), 'OpenAI 요청에 실패했습니다 (400)')
 })
 
+test('OpenAI health check uses a GPT-5.1 compatible request', async () => {
+  const originalFetch = globalThis.fetch
+  let requests = []
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(String(init?.body))
+    requests = [...requests, body]
+    const incompatible =
+      body.max_completion_tokens < 32 ||
+      ((body.model === 'gpt-5.1' || body.model.startsWith('gpt-5.6')) && body.reasoning_effort !== 'none') ||
+      (body.model === 'gpt-5-mini' && ('reasoning_effort' in body || 'temperature' in body)) ||
+      (body.model === 'gpt-4.1' && 'reasoning_effort' in body)
+    if (incompatible) {
+      return new Response(JSON.stringify({ error: { code: 'invalid_request_error', param: 'max_completion_tokens' } }), { status: 400 })
+    }
+    return new Response(JSON.stringify({
+      model: 'gpt-5.1',
+      choices: [{ message: { content: 'pong' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    }))
+  }
+  try {
+    const provider = new CodexProvider('test-key')
+    assert.deepEqual(await provider.healthCheck(), {
+      ok: true,
+      message: '연결 확인 완료 (model: gpt-5.1)',
+    })
+    await provider.generateBriefing('system', 'user', { jsonMode: true })
+    await provider.chat([{ role: 'user', content: 'hello' }])
+    assert.deepEqual(provider.getAvailableModels(), ['gpt-5.1', 'gpt-5.6', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-4.1'])
+    assert.equal(requests[1].messages[0].role, 'developer')
+    assert.deepEqual(requests[1].response_format, { type: 'json_object' })
+    assert.equal((await new CodexProvider('test-key', 'gpt-5-mini').healthCheck()).ok, true)
+    assert.equal((await new CodexProvider('test-key', 'gpt-4.1').healthCheck()).ok, true)
+    assert.equal((await new CodexProvider('test-key', 'gpt-5.6').healthCheck()).ok, true)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('OpenAI structured errors are useful without exposing upstream messages', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    error: { code: 'insufficient_quota', message: 'sensitive upstream account detail' },
+  }), { status: 429 })
+  try {
+    const health = await new CodexProvider('test-key').healthCheck()
+    assert.equal(health.ok, false)
+    assert.equal(health.message, 'OpenAI 크레딧 또는 프로젝트 사용 한도를 확인해 주세요')
+    assert.doesNotMatch(health.message, /sensitive|account detail/)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('a corrupted stored LLM credential cannot be masked by an environment fallback', () => {
   assert.equal(selectLLMCredential(true, null, 'valid-environment-key'), null)
   assert.equal(selectLLMCredential(false, null, 'valid-environment-key'), 'valid-environment-key')
@@ -124,4 +190,12 @@ test('LLM credential input rejects malformed or oversized values', () => {
   assert.equal(adapter.validate({ apiKey: 'short' }).valid, false)
   assert.equal(adapter.validate({ apiKey: 'x'.repeat(4097) }).valid, false)
   assert.equal(adapter.validate(validInput).valid, true)
+
+  const openai = getCredentialAdapter('codex')
+  assert.equal(openai.validate({ apiKey: 'x'.repeat(12), model: 'unknown-model' }).valid, false)
+  assert.equal(openai.validate({ apiKey: 'x'.repeat(12), model: 'gpt-5.6' }).valid, true)
+  assert.deepEqual(openai.normalize({ apiKey: ` ${'x'.repeat(12)} `, model: 'gpt-5-mini' }), {
+    apiKey: 'x'.repeat(12),
+    model: 'gpt-5-mini',
+  })
 })

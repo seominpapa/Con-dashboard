@@ -87,8 +87,8 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
       }
       case 'naver': {
         const { NaverNewsProvider } = await import('../../providers/news/NaverNewsProvider')
-        const p = new NaverNewsProvider(credential.clientId, credential.clientSecret)
-        await p.getNews([], 1)
+        const p = new NaverNewsProvider(credential.clientId, credential.clientSecret, credential.apiType === 'apiHub' ? 'apiHub' : 'legacy')
+        await p.getNews(['건설정책'], 1)
         break
       }
       case 'vworld': {

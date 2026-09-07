@@ -43,9 +43,12 @@ export interface LLMProvider {
   getAvailableModels(): string[]
 }
 
-export function formatProviderHttpError(provider: string, status: number): string {
+export function formatProviderHttpError(provider: string, status: number, detail?: { code?: string; param?: string }): string {
   if (status === 401 || status === 403) return `${provider} 인증에 실패했습니다`
+  if (status === 429 && detail?.code === 'insufficient_quota') return `${provider} 크레딧 또는 프로젝트 사용 한도를 확인해 주세요`
   if (status === 429) return `${provider} 요청 한도를 초과했습니다`
+  if (status === 400 && detail?.param === 'max_completion_tokens') return `${provider} 출력 토큰 설정이 올바르지 않습니다`
+  if (status === 400 && detail?.param === 'temperature') return `${provider} 모델이 temperature 설정을 지원하지 않습니다`
   if (status >= 500) return `${provider} 서비스가 일시적으로 응답하지 않습니다`
   return `${provider} 요청에 실패했습니다 (${status})`
 }

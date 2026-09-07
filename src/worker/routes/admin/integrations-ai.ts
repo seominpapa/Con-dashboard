@@ -7,6 +7,7 @@ import { getCredentialAdapter } from '../../llm/CredentialAdapter'
 import { createLLMProvider, getLLMProvider, type LLMProviderKey } from '../../llm'
 import { AI_PROVIDERS } from '../../../shared/types/integration'
 import { ok, fail } from '../../../shared/types/common'
+import { OPENAI_MODELS } from '../../../shared/types/integration'
 
 const app = new Hono<AppEnv>()
 
@@ -31,6 +32,7 @@ app.get('/', async (c) => {
       lastError: summary?.lastError ?? null,
       envFallbackAvailable: envFallback,
       dbConfigured: Boolean(summary?.connectedAt),
+      model: p.key === 'codex' && typeof summary?.metadata?.model === 'string' ? summary.metadata.model : p.key === 'codex' ? OPENAI_MODELS[0] : null,
     }
   })
 
@@ -49,12 +51,18 @@ app.post('/:provider/connect', async (c) => {
   if (!validation.valid) return c.json(fail(validation.message ?? '입력값이 올바르지 않습니다', 'live'), 400)
   const normalized = adapter.normalize(body)
 
-  const provider = createLLMProvider(providerKey, normalized.apiKey)
+  const provider = createLLMProvider(providerKey, normalized.apiKey, normalized.model)
   const health = await provider.healthCheck()
   if (!health.ok) return c.json(fail(health.message ?? 'LLM Provider 연결에 실패했습니다', 'live'), 400)
 
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
-  await repo.upsertCredential({ provider: providerKey, type: 'ai_provider', credential: normalized, updatedBy: admin.id })
+  await repo.upsertCredential({
+    provider: providerKey,
+    type: 'ai_provider',
+    credential: normalized,
+    metadata: providerKey === 'codex' ? { model: normalized.model } : undefined,
+    updatedBy: admin.id,
+  })
   await repo.recordCheckResult(providerKey, true)
   return c.json(ok({ provider: providerKey, health }, 'live'))
 })
