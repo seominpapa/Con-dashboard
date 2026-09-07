@@ -2,11 +2,11 @@ import { Hono } from 'hono'
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie'
 import type { AppEnv } from '../env'
 import {
+  isGoogleOAuthConfigured,
   buildGoogleAuthUrl,
   exchangeCodeForToken,
   fetchGoogleUserInfo,
 } from '../auth/googleOAuth'
-import { resolveGoogleOAuthCredential, toGoogleOAuthBindings } from '../auth/googleOAuthConfig'
 import { UserRepository } from '../repositories/UserRepository'
 import { createSession, deleteSession, signSessionValue, verifySessionValue, generateId, sessionCookieName, getAuthSecretFromEnv } from '../auth/session'
 import { toPublicUser } from '../../shared/types/user'
@@ -16,13 +16,13 @@ const app = new Hono<AppEnv>()
 
 const STATE_COOKIE = 'cd_oauth_state'
 
-async function getAuthBindings(env: AppEnv['Bindings']) {
+function isAuthConfigured(env: AppEnv['Bindings']): boolean {
+  if (!isGoogleOAuthConfigured(env)) return false
   try {
     getAuthSecretFromEnv(env)
-    const credential = await resolveGoogleOAuthCredential(env)
-    return credential ? toGoogleOAuthBindings(credential) : null
+    return true
   } catch {
-    return null
+    return false
   }
 }
 
@@ -33,8 +33,7 @@ function getRedirectUri(c: any, env: any): string {
 
 // GET /api/auth/google - OAuth 시작
 app.get('/google', async (c) => {
-  const auth = await getAuthBindings(c.env)
-  if (!auth) {
+  if (!isAuthConfigured(c.env)) {
     return c.json(fail('Google 로그인이 아직 설정되지 않았습니다. 관리자에게 문의하세요.', 'unconfigured' as any), 503)
   }
   const state = generateId('state')
@@ -46,7 +45,7 @@ app.get('/google', async (c) => {
     path: '/',
   })
   const redirectUri = getRedirectUri(c, c.env)
-  const url = buildGoogleAuthUrl(auth, redirectUri, state)
+  const url = buildGoogleAuthUrl(c.env, redirectUri, state)
   return c.redirect(url)
 })
 
@@ -59,14 +58,13 @@ app.get('/google/callback', async (c) => {
   if (!code || !state || !savedState || state !== savedState) {
     return c.redirect('/login?error=invalid_state')
   }
-  const auth = await getAuthBindings(c.env)
-  if (!auth) {
+  if (!isAuthConfigured(c.env)) {
     return c.redirect('/login?error=not_configured')
   }
 
   try {
     const redirectUri = getRedirectUri(c, c.env)
-    const tokenRes = await exchangeCodeForToken(auth, code, redirectUri)
+    const tokenRes = await exchangeCodeForToken(c.env, code, redirectUri)
     const profile = await fetchGoogleUserInfo(tokenRes.access_token)
 
     const userRepo = new UserRepository(c.env.DB)
@@ -141,7 +139,7 @@ app.post('/logout', async (c) => {
 
 // GET /api/auth/config - 클라이언트가 Google 로그인 버튼 노출 여부 판단용 (Key 노출 없음)
 app.get('/config', async (c) => {
-  return c.json({ status: 'success', data: { googleEnabled: Boolean(await getAuthBindings(c.env)) } })
+  return c.json({ status: 'success', data: { googleEnabled: isAuthConfigured(c.env) } })
 })
 
 export default app

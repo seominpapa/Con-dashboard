@@ -13,6 +13,7 @@ interface CacheEntry<T> {
 }
 
 const store = new Map<string, CacheEntry<unknown>>()
+const MAX_ENTRIES = 500
 
 export function cacheGet<T>(key: string): T | undefined {
   const entry = store.get(key)
@@ -25,6 +26,10 @@ export function cacheGet<T>(key: string): T | undefined {
 }
 
 export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
+  if (!store.has(key) && store.size >= MAX_ENTRIES) {
+    const oldestKey = store.keys().next().value
+    if (oldestKey !== undefined) store.delete(oldestKey)
+  }
   store.set(key, { value, expiresAt: Date.now() + ttlMs })
 }
 
@@ -60,4 +65,5 @@ export const CACHE_TTL = {
   exchange: 45 * 60 * 1000, // 30분~1시간 -> 45분
   oil: 60 * 60 * 1000, // 1시간
   material: 12 * 60 * 60 * 1000, // 6~24시간 -> 12시간
+  addressSearch: 10 * 60 * 1000,
 } as const

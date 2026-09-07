@@ -10,7 +10,7 @@ const DEFAULT_MODEL = 'claude-sonnet-5'
  */
 export class ClaudeProvider implements LLMProvider {
   readonly key = 'claude' as const
-  readonly label = 'Claude'
+  readonly label = 'Anthropic API (Claude)'
   private model: string
 
   constructor(private apiKey: string, model?: string) {

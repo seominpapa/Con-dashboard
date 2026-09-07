@@ -1,10 +1,9 @@
 import type { Bindings } from '../env'
 
-export type GoogleOAuthBindings = Pick<Bindings, 'GOOGLE_CLIENT_ID' | 'GOOGLE_CLIENT_SECRET'>
-
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
+const MAX_OAUTH_CREDENTIAL_LENGTH = 4096
 
 export interface GoogleUserInfo {
   sub: string
@@ -12,6 +11,18 @@ export interface GoogleUserInfo {
   email_verified: boolean
   name: string
   picture?: string
+}
+
+function getGoogleOAuthCredentials(env: Bindings): { clientId: string; clientSecret: string } {
+  const clientId = env.GOOGLE_CLIENT_ID?.trim()
+  const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim()
+  if (
+    !clientId?.endsWith('.apps.googleusercontent.com') ||
+    !clientSecret ||
+    clientId.length > MAX_OAUTH_CREDENTIAL_LENGTH ||
+    clientSecret.length > MAX_OAUTH_CREDENTIAL_LENGTH
+  ) throw new Error('Google OAuth가 설정되지 않았습니다')
+  return { clientId, clientSecret }
 }
 
 export function parseGoogleUserInfo(value: unknown): GoogleUserInfo {
@@ -37,13 +48,19 @@ export function parseGoogleUserInfo(value: unknown): GoogleUserInfo {
   }
 }
 
-export function isGoogleOAuthConfigured(env: GoogleOAuthBindings): boolean {
-  return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET)
+export function isGoogleOAuthConfigured(env: Bindings): boolean {
+  try {
+    getGoogleOAuthCredentials(env)
+    return true
+  } catch {
+    return false
+  }
 }
 
-export function buildGoogleAuthUrl(env: GoogleOAuthBindings, redirectUri: string, state: string): string {
+export function buildGoogleAuthUrl(env: Bindings, redirectUri: string, state: string): string {
+  const { clientId } = getGoogleOAuthCredentials(env)
   const url = new URL(GOOGLE_AUTH_URL)
-  url.searchParams.set('client_id', env.GOOGLE_CLIENT_ID!)
+  url.searchParams.set('client_id', clientId)
   url.searchParams.set('redirect_uri', redirectUri)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', 'openid email profile')
@@ -53,17 +70,18 @@ export function buildGoogleAuthUrl(env: GoogleOAuthBindings, redirectUri: string
 }
 
 export async function exchangeCodeForToken(
-  env: GoogleOAuthBindings,
+  env: Bindings,
   code: string,
   redirectUri: string
 ): Promise<{ access_token: string; id_token: string }> {
+  const { clientId, clientSecret } = getGoogleOAuthCredentials(env)
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: env.GOOGLE_CLIENT_ID!,
-      client_secret: env.GOOGLE_CLIENT_SECRET!,
+      client_id: clientId,
+      client_secret: clientSecret,
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),

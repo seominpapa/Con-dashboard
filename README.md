@@ -77,6 +77,19 @@ API 연동을 관리하는 구조로 설계되었습니다.
 - **안전 원칙**: 위험도/우선순위 판단은 룰엔진이 수행하고, LLM은 설명/종합만 담당
 - LLM 실패 시에도 대시보드 전체는 정상 동작 (해당 위젯만 안내 문구로 격하)
 
+### LLM 인증 방식 (API Key 전용)
+- 이 배포는 서버에서 OpenAI/Anthropic REST API를 직접 호출하며, 관리자가 등록한 공식 API Key만
+  사용한다.
+- **OpenAI API Key 발급**: https://platform.openai.com/api-keys
+- **Anthropic API Key 발급**: https://platform.claude.com/settings/keys
+- ChatGPT/Codex 구독 OAuth는 별도 `Codex App Server` 프로세스와 OAuth 토큰 영구 저장소가
+  필요하다. 현재 Cloudflare Pages/Worker 배포에는 해당 서버가 없으므로 지원하지 않는다. 도입하려면
+  Cloudflare Container 또는 별도 VM을 추가하고 배포·보안 구조를 분리해야 한다.
+- Claude Pro/Max OAuth를 제3자 웹앱 사용자의 요청에 중계하는 방식은 Anthropic 정책상 허용되지
+  않으므로 Anthropic API Key를 사용한다:
+  https://code.claude.com/docs/en/legal-and-compliance
+- Google OAuth는 웹앱 사용자 로그인 전용이며 LLM Provider 인증과는 무관하다.
+
 ## 데이터 아키텍처
 - **저장소**: Cloudflare D1 (SQLite) — 사용자, 세션, 현장, 일정, 할일, 대시보드 설정, 연동
   Credential(암호화), AI 브리핑 캐시 등

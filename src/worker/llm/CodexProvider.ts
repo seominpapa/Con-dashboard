@@ -9,7 +9,7 @@ const DEFAULT_MODEL = 'gpt-5.1'
  */
 export class CodexProvider implements LLMProvider {
   readonly key = 'codex' as const
-  readonly label = 'Codex / OpenAI'
+  readonly label = 'OpenAI API'
   private model: string
 
   constructor(private apiKey: string, model?: string) {

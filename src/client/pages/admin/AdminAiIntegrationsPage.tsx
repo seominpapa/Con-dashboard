@@ -26,6 +26,11 @@ const API_KEY_URL = {
   codex: 'https://platform.openai.com/api-keys',
 } as const
 
+const SUBSCRIPTION_OAUTH_NOTES = [
+  'ChatGPT/Codex 구독 로그인은 별도 Codex App Server가 필요해 현재 Cloudflare 배포에서는 연결할 수 없습니다.',
+  'Claude Pro/Max 구독 OAuth는 이 웹앱의 공유 서버 연동에 사용할 수 없으므로 Anthropic API Key가 필요합니다.',
+]
+
 /**
  * LLM Provider 관리 (기획 33, 52번): Claude / Codex(OpenAI) 공식 API Key 연동만
  * 지원한다. 반드시 공식 API Key 인증만 사용하며 CLI OAuth 자격증명 파일을 읽지
@@ -102,8 +107,13 @@ export function AdminAiIntegrationsPage() {
         <Bot size={15} /> LLM Provider (AI 브리핑)
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        이 화면에서는 Anthropic/OpenAI 공식 API Key를 등록하고 AI 브리핑의 기본 Provider를 선택합니다. 관리자 로그인은 <strong>OAuth 인증</strong> 메뉴에서 설정합니다.
+        이 화면에서는 Anthropic/OpenAI 공식 API Key를 등록하고 AI 브리핑의 기본 Provider를 선택합니다.
       </p>
+      <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        {SUBSCRIPTION_OAUTH_NOTES.map((note) => (
+          <p key={note}>{note}</p>
+        ))}
+      </div>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
         {rows.map((r) => {
@@ -120,6 +130,14 @@ export function AdminAiIntegrationsPage() {
                   {r.dbConfigured ? ' · 관리자 등록됨' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ' · 미설정'}
                   {r.lastError ? ` · ${r.lastError}` : ''}
                 </p>
+                <a
+                  href={API_KEY_URL[r.provider]}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
+                >
+                  API Key 발급 사이트 <ExternalLink size={11} />
+                </a>
               </div>
               <div className="flex shrink-0 gap-1.5">
                 {r.status === 'CONNECTED' && defaultProvider !== r.provider && (
@@ -164,7 +182,7 @@ export function AdminAiIntegrationsPage() {
             />
           </div>
           <p className="text-[11px] text-slate-400">
-            모델 제공사의 공식 API Key만 입력하세요. CLI 로그인용 OAuth 자격증명은 서버 API 호출에 사용할 수 없으며, 저장 전 실제 연결을 확인합니다.
+            모델 제공사의 공식 API Key만 입력하세요. Codex/Claude 구독 로그인 OAuth는 이 서버 배포에서 중계하지 않으며, 저장 전 실제 연결을 확인합니다.
           </p>
           {editing && (
             <a href={API_KEY_URL[editing.provider]} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">

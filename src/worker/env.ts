@@ -15,8 +15,6 @@ export interface Bindings {
   DISABLE_ADMIN_BOOTSTRAP?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
-  /** true면 관리자 등록 OAuth보다 Cloudflare 환경변수를 강제로 우선 사용 */
-  FORCE_ENV_GOOGLE_OAUTH?: string
   /** OAuth Redirect에 사용할 서비스 기준 URL (예: https://xxx.pages.dev) */
   APP_BASE_URL?: string
 

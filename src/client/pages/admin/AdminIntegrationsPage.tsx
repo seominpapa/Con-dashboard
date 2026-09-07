@@ -102,7 +102,7 @@ export function AdminIntegrationsPage() {
         <Plug size={15} /> 공개 데이터 API 연결 센터
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        관리자 로그인은 <strong>OAuth 인증</strong> 메뉴에서, 공개데이터 제공사의 API Key/Client ID는 이 화면에서 설정합니다. 입력값은 암호화되어 저장됩니다.
+        공개데이터 제공사의 API Key/Client ID를 설정합니다. 입력값은 암호화되어 저장되며, 사이트 로그인용 Google OAuth는 Cloudflare Secrets에서 관리합니다.
       </p>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">

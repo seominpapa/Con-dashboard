@@ -21,7 +21,6 @@ import briefingRoutes from './routes/briefing'
 import adminUsersRoutes from './routes/admin/users'
 import adminIntegrationsRoutes from './routes/admin/integrations'
 import adminIntegrationsAiRoutes from './routes/admin/integrations-ai'
-import adminOAuthRoutes from './routes/admin/oauth'
 
 const app = new Hono<AppEnv>()
 
@@ -57,7 +56,6 @@ admin.use('*', requireAdmin)
 admin.route('/users', adminUsersRoutes)
 admin.route('/integrations', adminIntegrationsRoutes)
 admin.route('/integrations/ai', adminIntegrationsAiRoutes)
-admin.route('/oauth', adminOAuthRoutes)
 app.route('/api/admin', admin)
 
 // ---- API 404 ----

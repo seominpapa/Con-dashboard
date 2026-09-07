@@ -13,10 +13,6 @@ import {
 } from '../src/worker/auth/googleOAuth.ts'
 import { formatProviderHttpError } from '../src/worker/llm/LLMProvider.ts'
 import { getCredentialAdapter, selectLLMCredential } from '../src/worker/llm/CredentialAdapter.ts'
-import {
-  selectGoogleOAuthCredential,
-  validateGoogleOAuthCredential,
-} from '../src/worker/auth/googleOAuthCredential.ts'
 
 test('public API credentials require exactly the provider fields', () => {
   assert.deepEqual(validatePublicCredential('kma', { apiKey: '  key-123  ' }), {
@@ -74,14 +70,19 @@ test('Google OAuth accepts only a verified, well-formed profile', () => {
 })
 
 test('Google OAuth uses the configured callback and validates remote responses', async () => {
-  const env = { GOOGLE_CLIENT_ID: 'client-id', GOOGLE_CLIENT_SECRET: 'client-secret' }
+  const env = { GOOGLE_CLIENT_ID: 'client-id.apps.googleusercontent.com', GOOGLE_CLIENT_SECRET: 'client-secret' }
   assert.equal(isGoogleOAuthConfigured(env), true)
   assert.equal(isGoogleOAuthConfigured({}), false)
+  assert.equal(isGoogleOAuthConfigured({ GOOGLE_CLIENT_ID: ' ', GOOGLE_CLIENT_SECRET: 'client-secret' }), false)
+  assert.equal(isGoogleOAuthConfigured({ GOOGLE_CLIENT_ID: 'not-a-google-client', GOOGLE_CLIENT_SECRET: 'client-secret' }), false)
+  assert.equal(isGoogleOAuthConfigured({ GOOGLE_CLIENT_ID: `${'x'.repeat(4096)}.apps.googleusercontent.com`, GOOGLE_CLIENT_SECRET: 'client-secret' }), false)
 
   const authorizationUrl = new URL(buildGoogleAuthUrl(env, 'https://dashboard.example.com/callback', 'state-1'))
-  assert.equal(authorizationUrl.searchParams.get('client_id'), 'client-id')
+  assert.equal(authorizationUrl.searchParams.get('client_id'), 'client-id.apps.googleusercontent.com')
   assert.equal(authorizationUrl.searchParams.get('redirect_uri'), 'https://dashboard.example.com/callback')
   assert.equal(authorizationUrl.searchParams.get('state'), 'state-1')
+  const trimmedUrl = new URL(buildGoogleAuthUrl({ GOOGLE_CLIENT_ID: ' client-id.apps.googleusercontent.com ', GOOGLE_CLIENT_SECRET: ' client-secret ' }, 'https://dashboard.example.com/callback', 'state-2'))
+  assert.equal(trimmedUrl.searchParams.get('client_id'), 'client-id.apps.googleusercontent.com')
 
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url) => {
@@ -123,23 +124,4 @@ test('LLM credential input rejects malformed or oversized values', () => {
   assert.equal(adapter.validate({ apiKey: 'short' }).valid, false)
   assert.equal(adapter.validate({ apiKey: 'x'.repeat(4097) }).valid, false)
   assert.equal(adapter.validate(validInput).valid, true)
-})
-
-test('Google OAuth credentials require an official web client id and secret', () => {
-  assert.equal(validateGoogleOAuthCredential(null).valid, false)
-  assert.equal(validateGoogleOAuthCredential({ clientId: 'wrong', clientSecret: 'secret' }).valid, false)
-  assert.equal(validateGoogleOAuthCredential({ clientId: '123.apps.googleusercontent.com' }).valid, false)
-  assert.deepEqual(
-    validateGoogleOAuthCredential({ clientId: ' 123.apps.googleusercontent.com ', clientSecret: ' secret ' }),
-    { valid: true, credential: { clientId: '123.apps.googleusercontent.com', clientSecret: 'secret' } },
-  )
-})
-
-test('Google OAuth keeps environment credentials as a break-glass fallback', () => {
-  const stored = { clientId: 'stored.apps.googleusercontent.com', clientSecret: 'stored-secret' }
-  const env = { clientId: 'env.apps.googleusercontent.com', clientSecret: 'env-secret' }
-  assert.deepEqual(selectGoogleOAuthCredential(false, stored, env), stored)
-  assert.deepEqual(selectGoogleOAuthCredential(false, null, env), env)
-  assert.deepEqual(selectGoogleOAuthCredential(true, stored, env), env)
-  assert.equal(selectGoogleOAuthCredential(true, stored, null), null)
 })

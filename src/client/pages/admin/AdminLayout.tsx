@@ -1,11 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Users, Plug, Bot, ShieldCheck } from 'lucide-react'
+import { Users, Plug, Bot } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
 const MENU = [
   { to: '/admin/users', label: '사용자 관리', icon: Users },
   { to: '/admin/integrations', label: 'API 연결 센터', icon: Plug },
-  { to: '/admin/oauth', label: 'OAuth 인증', icon: ShieldCheck },
   { to: '/admin/integrations/ai', label: 'LLM Provider', icon: Bot },
 ]
 

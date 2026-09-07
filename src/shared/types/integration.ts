@@ -1,7 +1,7 @@
 /** 관리자 API 연결센터 도메인 모델 (기획 33~34, 52) */
 
 export type IntegrationStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'EXPIRED' | 'CHECKING'
-export type IntegrationType = 'public_api' | 'ai_provider' | 'auth_provider'
+export type IntegrationType = 'public_api' | 'ai_provider'
 
 export type PublicApiProviderKey = 'kma' | 'airkorea' | 'g2b' | 'law' | 'ecos' | 'opinet' | 'naver' | 'vworld'
 export type AiProviderKey = 'claude' | 'codex'
@@ -33,6 +33,6 @@ export const PUBLIC_API_PROVIDERS: { key: PublicApiProviderKey; label: string; e
 ]
 
 export const AI_PROVIDERS: { key: AiProviderKey; label: string }[] = [
-  { key: 'claude', label: 'Claude' },
-  { key: 'codex', label: 'Codex / OpenAI' },
+  { key: 'claude', label: 'Anthropic API (Claude)' },
+  { key: 'codex', label: 'OpenAI API' },
 ]

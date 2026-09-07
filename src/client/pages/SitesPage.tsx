@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { MapPin, Plus, Trash2, Edit2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { MapPin, Plus, Trash2, Edit2, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import { Modal } from '../components/ui/Modal'
 import { useSites } from '../context/SiteContext'
@@ -9,6 +9,12 @@ const STATUS_OPTIONS = Object.entries(SITE_STATUS_LABEL) as [SiteStatus, string]
 
 const EMPTY_FORM = { name: '', company: '', address: '', startDate: '', endDate: '', status: 'active' as SiteStatus }
 
+interface AddressSearchResult {
+  address: string
+  roadAddress?: string
+  parcelAddress?: string
+}
+
 /** 다중 현장 관리 (기획 18번): 현장 CRUD + 위경도 -> 기상청 격자좌표 변환은 서버에서 처리 */
 export function SitesPage() {
   const { sites, refetch, setActiveSiteId } = useSites()
@@ -16,11 +22,43 @@ export function SitesPage() {
   const [editing, setEditing] = useState<Site | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [error, setError] = useState('')
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([])
+  const [addressSearching, setAddressSearching] = useState(false)
+  const [addressSearchError, setAddressSearchError] = useState('')
+  const [selectedAddress, setSelectedAddress] = useState('')
+
+  useEffect(() => {
+    const query = form.address.trim()
+    if (!open || query.length < 2 || query === selectedAddress) {
+      setAddressResults([])
+      setAddressSearching(false)
+      setAddressSearchError('')
+      return
+    }
+
+    let active = true
+    setAddressSearching(true)
+    const timer = window.setTimeout(async () => {
+      const res = await api.get<AddressSearchResult[]>(`/api/sites/address-search?q=${encodeURIComponent(query)}`)
+      if (!active) return
+      setAddressResults(res.status === 'success' ? res.data ?? [] : [])
+      setAddressSearchError(res.status === 'error' ? res.message ?? '주소를 검색할 수 없습니다' : '')
+      setAddressSearching(false)
+    }, 300)
+
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [form.address, open, selectedAddress])
 
   function openCreate() {
     setEditing(null)
     setForm(EMPTY_FORM)
     setError('')
+    setAddressResults([])
+    setAddressSearchError('')
+    setSelectedAddress('')
     setOpen(true)
   }
 
@@ -35,6 +73,9 @@ export function SitesPage() {
       status: s.status,
     })
     setError('')
+    setAddressResults([])
+    setAddressSearchError('')
+    setSelectedAddress(s.address)
     setOpen(true)
   }
 
@@ -113,13 +154,32 @@ export function SitesPage() {
             value={form.company}
             onChange={(e) => setForm({ ...form, company: e.target.value })}
           />
-          <input
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            aria-label="현장 주소"
-            placeholder="주소"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-2.5 text-slate-300" size={14} />
+            <input
+              className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-sm"
+              aria-label="현장 주소"
+              autoComplete="off"
+              list="site-address-results"
+              placeholder="주소 검색"
+              value={form.address}
+              onChange={(e) => {
+                const address = e.target.value
+                setForm({ ...form, address })
+                if (addressResults.some((item) => item.address === address)) {
+                  setSelectedAddress(address)
+                  setAddressResults([])
+                } else {
+                  setSelectedAddress('')
+                }
+              }}
+            />
+            <datalist id="site-address-results">
+              {addressResults.map((item) => <option key={item.address} value={item.address}>{item.parcelAddress}</option>)}
+            </datalist>
+          </div>
+          {addressSearching && <p className="text-[11px] text-slate-400">주소 검색 중...</p>}
+          {addressSearchError && <p role="alert" className="text-[11px] text-red-500">{addressSearchError}</p>}
           <div className="grid grid-cols-2 gap-2">
             <input type="date" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
             <input type="date" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
