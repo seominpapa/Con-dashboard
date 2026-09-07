@@ -28,7 +28,7 @@ export const PUBLIC_API_PROVIDERS: { key: PublicApiProviderKey; label: string; e
   { key: 'kma', label: '기상청', envVar: 'KMA_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15084084/openapi.do' },
   { key: 'airkorea', label: 'AirKorea', envVar: 'AIRKOREA_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15073861/openapi.do' },
   { key: 'g2b', label: '나라장터', envVar: 'G2B_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15129394/openapi.do' },
-  { key: 'law', label: '국가법령정보', envVar: 'LAW_API_KEY', docsUrl: 'https://open.law.go.kr/LSO/usrJoin.do' },
+  { key: 'law', label: '국가법령정보', envVar: 'LAW_OC', docsUrl: 'https://open.law.go.kr/LSO/usrJoin.do' },
   { key: 'ecos', label: '환율(한국은행 ECOS)', envVar: 'ECOS_API_KEY', docsUrl: 'https://ecos.bok.or.kr/api/' },
   { key: 'opinet', label: '유가(Opinet)', envVar: 'OPINET_API_KEY', docsUrl: 'https://www.opinet.co.kr/user/custapi/openApiIntro.do' },
   { key: 'naver', label: '네이버 뉴스(보완)', envVar: 'NAVER_CLIENT_ID/SECRET', docsUrl: 'https://console.ncloud.com/naver-api-hub' },

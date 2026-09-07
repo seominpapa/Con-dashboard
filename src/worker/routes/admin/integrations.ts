@@ -6,6 +6,7 @@ import { ok, fail } from '../../../shared/types/common'
 import { PUBLIC_API_PROVIDERS, type PublicApiProviderKey } from '../../../shared/types/integration'
 import type { Site } from '../../../shared/types/site'
 import { publicProviderFailureMessage, validatePublicCredential } from '../../integrations/publicCredentials'
+import { VWorldApiError, VWorldGeocodingProvider } from '../../providers/geocoding/VWorldGeocodingProvider'
 
 const app = new Hono<AppEnv>()
 
@@ -28,7 +29,7 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   kma: ['KMA_SERVICE_KEY'],
   airkorea: ['AIRKOREA_SERVICE_KEY'],
   g2b: ['G2B_SERVICE_KEY'],
-  law: ['LAW_API_KEY'],
+  law: ['LAW_OC'],
   ecos: ['ECOS_API_KEY'],
   opinet: ['OPINET_API_KEY'],
   naver: ['NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET'],
@@ -41,12 +42,16 @@ function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKe
       ? { clientId: env.NAVER_CLIENT_ID, clientSecret: env.NAVER_CLIENT_SECRET }
       : null
   }
+  if (provider === 'law') {
+    const oc = env.LAW_OC || env.LAW_API_KEY
+    return oc ? { oc } : null
+  }
   const value = env[ENV_VAR_MAP[provider][0] as keyof AppEnv['Bindings']]
   return typeof value === 'string' && value ? { apiKey: value } : null
 }
 
 /** 폴백 없이 지정된 자격증명 자체로 최소 호출을 수행한다. */
-async function testPublicCredential(provider: PublicApiProviderKey, credential: Record<string, string>): Promise<{ ok: boolean; message?: string }> {
+async function testPublicCredential(provider: PublicApiProviderKey, credential: Record<string, string>, domain: string): Promise<{ ok: boolean; message?: string }> {
   try {
     switch (provider) {
       case 'kma': {
@@ -69,7 +74,7 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
       }
       case 'law': {
         const { NlicLawProvider } = await import('../../providers/laws/NlicLawProvider')
-        const p = new NlicLawProvider(credential.apiKey)
+        const p = new NlicLawProvider(credential.oc)
         await p.getLaws(['건설산업기본법'])
         break
       }
@@ -92,14 +97,14 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         break
       }
       case 'vworld': {
-        const { VWorldGeocodingProvider } = await import('../../providers/geocoding/VWorldGeocodingProvider')
-        const p = new VWorldGeocodingProvider(credential.apiKey)
+        const p = new VWorldGeocodingProvider(credential.apiKey, domain)
         await p.geocode(TEST_SITE.address)
         break
       }
     }
     return { ok: true, message: '실제 API 연결 확인 완료' }
-  } catch {
+  } catch (error) {
+    if (provider === 'vworld' && error instanceof VWorldApiError) return { ok: false, message: error.message }
     return { ok: false, message: publicProviderFailureMessage(provider) }
   }
 }
@@ -112,7 +117,7 @@ app.get('/', async (c) => {
 
   const result = PUBLIC_API_PROVIDERS.map((p) => {
     const summary = byProvider.get(p.key)
-    const envFallbackAvailable = ENV_VAR_MAP[p.key].every((v) => Boolean((c.env as any)[v]))
+    const envFallbackAvailable = Boolean(getEnvCredential(c.env, p.key))
     return {
       provider: p.key,
       label: p.label,
@@ -141,7 +146,8 @@ app.post('/:provider/connect', async (c) => {
   const validation = validatePublicCredential(provider, body.credential)
   if (!validation.valid) return c.json(fail(validation.message, 'live'), 400)
 
-  const testResult = await testPublicCredential(provider, validation.credential)
+  const domain = provider === 'vworld' ? new URL(c.env.APP_BASE_URL || c.req.url).origin : ''
+  const testResult = await testPublicCredential(provider, validation.credential, domain)
   if (!testResult.ok) return c.json(fail(testResult.message ?? '외부 API 연결에 실패했습니다', 'live'), 400)
 
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
@@ -164,10 +170,12 @@ app.post('/:provider/test', async (c) => {
   } catch {
     return c.json(fail('저장된 자격증명을 복호화할 수 없습니다. 다시 연결해 주세요.', 'live'), 400)
   }
+  if (provider === 'law' && stored?.apiKey && !stored.oc) stored = { oc: stored.apiKey }
   const validation = validatePublicCredential(provider, stored ?? getEnvCredential(c.env, provider))
   if (!validation.valid) return c.json(fail('연결된 자격증명이 없습니다', 'live'), 400)
 
-  const testResult = await testPublicCredential(provider, validation.credential)
+  const domain = provider === 'vworld' ? new URL(c.env.APP_BASE_URL || c.req.url).origin : ''
+  const testResult = await testPublicCredential(provider, validation.credential, domain)
   await repo.ensureRow(provider, 'public_api')
   await repo.recordCheckResult(provider, testResult.ok, testResult.ok ? undefined : testResult.message)
   return c.json(ok({ provider, testResult }, 'live'))

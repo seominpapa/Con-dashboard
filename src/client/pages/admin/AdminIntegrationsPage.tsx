@@ -57,6 +57,9 @@ export function AdminIntegrationsPage() {
         { key: 'clientSecret', label: 'Client Secret', placeholder: 'Naver Client Secret' },
       ]
     }
+    if (provider === 'law') {
+      return [{ key: 'oc', label: 'OC', placeholder: '공동활용 신청 시 발급된 API 인증값' }]
+    }
     return [{ key: 'apiKey', label: 'API Key', placeholder: '서비스 인증키' }]
   }
 
@@ -102,7 +105,7 @@ export function AdminIntegrationsPage() {
         <Plug size={15} /> 공개 데이터 API 연결 센터
       </h2>
       <p className="mb-3 text-xs text-slate-400">
-        공개데이터 제공사의 API Key/Client ID를 설정합니다. 입력값은 암호화되어 저장되며, 사이트 로그인용 Google OAuth는 Cloudflare Secrets에서 관리합니다.
+        공개데이터 제공사의 API 인증값/API Key/Client ID를 설정합니다. 입력값은 암호화되어 저장되며, 사이트 로그인용 Google OAuth는 Cloudflare Secrets에서 관리합니다.
       </p>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>}
       <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
@@ -182,9 +185,12 @@ export function AdminIntegrationsPage() {
           {editing && ['kma', 'airkorea', 'g2b'].includes(editing.provider) && (
             <p className="text-[11px] text-slate-400">공공데이터포털의 인코딩 또는 디코딩 인증키를 모두 사용할 수 있습니다.</p>
           )}
+          {editing?.provider === 'law' && (
+            <p className="text-[11px] text-slate-400">API Key가 아니라 국가법령정보 공동활용 신청에서 발급된 OC 값을 입력하세요.</p>
+          )}
           {editing?.docsUrl && (
             <a href={editing.docsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
-              API Key 발급 사이트 <ExternalLink size={12} />
+              {editing.provider === 'law' ? '공동활용 신청/OC 확인 사이트' : 'API Key 발급 사이트'} <ExternalLink size={12} />
             </a>
           )}
           {error && <p role="alert" className="text-xs text-red-600">{error}</p>}

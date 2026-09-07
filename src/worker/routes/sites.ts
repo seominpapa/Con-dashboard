@@ -3,7 +3,7 @@ import type { AppEnv } from '../env'
 import { SiteRepository } from '../repositories/SiteRepository'
 import { IntegrationRepository } from '../repositories/IntegrationRepository'
 import { getAuthSecretFromEnv } from '../auth/session'
-import { VWorldGeocodingProvider, type GeocodingResult } from '../providers/geocoding/VWorldGeocodingProvider'
+import { VWorldApiError, VWorldGeocodingProvider, type GeocodingResult } from '../providers/geocoding/VWorldGeocodingProvider'
 import { ok, fail } from '../../shared/types/common'
 import { latLonToKmaGrid } from '../../shared/utils/kmaGrid'
 import { CACHE_TTL, withCache } from '../cache/memoryCache'
@@ -35,10 +35,10 @@ async function getVWorldApiKey(env: AppEnv['Bindings']): Promise<string | null> 
   return credential?.apiKey || env.VWORLD_API_KEY || null
 }
 
-async function geocodeSiteAddress(env: AppEnv['Bindings'], address: string): Promise<GeocodingResult> {
+async function geocodeSiteAddress(env: AppEnv['Bindings'], address: string, domain: string): Promise<GeocodingResult> {
   const apiKey = await getVWorldApiKey(env)
-  if (!apiKey) throw new Error('관리자 > API 연결 센터에서 VWorld API Key를 먼저 설정해 주세요')
-  return new VWorldGeocodingProvider(apiKey).geocode(address)
+  if (!apiKey) throw new VWorldApiError('관리자 > API 연결 센터에서 VWorld API Key를 먼저 설정해 주세요')
+  return new VWorldGeocodingProvider(apiKey, domain).geocode(address)
 }
 
 const SITE_STATUSES = ['active', 'planned', 'completed', 'suspended'] as const
@@ -83,10 +83,12 @@ app.get('/address-search', async (c) => {
   }
   try {
     const cacheKey = `address-search:${query.toLocaleLowerCase('ko-KR')}`
-    const { value, cached } = await withCache(cacheKey, CACHE_TTL.addressSearch, () => new VWorldGeocodingProvider(apiKey).search(query))
+    const domain = new URL(c.env.APP_BASE_URL || c.req.url).origin
+    const { value, cached } = await withCache(cacheKey, CACHE_TTL.addressSearch, () => new VWorldGeocodingProvider(apiKey, domain).search(query))
     return c.json({ ...ok(value, 'live'), cached })
-  } catch {
-    return c.json(fail('주소 검색 서비스가 응답하지 않습니다', 'live'), 502)
+  } catch (err) {
+    const message = err instanceof VWorldApiError ? err.message : '주소 검색 서비스가 응답하지 않습니다'
+    return c.json(fail(message, 'live'), 502)
   }
 })
 
@@ -99,9 +101,10 @@ app.post('/', async (c) => {
 
   let coords: GeocodingResult
   try {
-    coords = await geocodeSiteAddress(c.env, body.address)
-  } catch (err: any) {
-    return c.json(fail(err.message || '주소로 좌표를 찾을 수 없습니다', 'live'), 400)
+    coords = await geocodeSiteAddress(c.env, body.address, new URL(c.env.APP_BASE_URL || c.req.url).origin)
+  } catch (err) {
+    const message = err instanceof VWorldApiError ? err.message : '주소로 좌표를 찾을 수 없습니다'
+    return c.json(fail(message, 'live'), 400)
   }
   const { nx, ny } = latLonToKmaGrid(coords.latitude, coords.longitude)
   const repo = new SiteRepository(c.env.DB)
@@ -134,9 +137,10 @@ app.patch('/:id', async (c) => {
   if (body.address && body.address !== existing.address) {
     let coords: GeocodingResult
     try {
-      coords = await geocodeSiteAddress(c.env, body.address)
-    } catch (err: any) {
-      return c.json(fail(err.message || '주소로 좌표를 찾을 수 없습니다', 'live'), 400)
+      coords = await geocodeSiteAddress(c.env, body.address, new URL(c.env.APP_BASE_URL || c.req.url).origin)
+    } catch (err) {
+      const message = err instanceof VWorldApiError ? err.message : '주소로 좌표를 찾을 수 없습니다'
+      return c.json(fail(message, 'live'), 400)
     }
     const { nx, ny } = latLonToKmaGrid(coords.latitude, coords.longitude)
     body.latitude = coords.latitude

@@ -4,7 +4,7 @@ const REQUIRED_FIELDS: Record<PublicApiProviderKey, readonly string[]> = {
   kma: ['apiKey'],
   airkorea: ['apiKey'],
   g2b: ['apiKey'],
-  law: ['apiKey'],
+  law: ['oc'],
   ecos: ['apiKey'],
   opinet: ['apiKey'],
   naver: ['clientId', 'clientSecret'],
@@ -67,5 +67,6 @@ export function validatePublicCredential(provider: PublicApiProviderKey, input: 
 }
 
 export function publicProviderFailureMessage(provider: PublicApiProviderKey): string {
+  if (provider === 'law') return '국가법령정보 API 연결 확인에 실패했습니다. OC와 공동활용 신청 승인 상태를 확인해 주세요'
   return `${FAILURE_LABELS[provider]} API 연결 확인에 실패했습니다. API 키와 해당 서비스의 활용신청 승인 상태를 확인해 주세요`
 }

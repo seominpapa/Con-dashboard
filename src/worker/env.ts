@@ -22,6 +22,8 @@ export interface Bindings {
   KMA_SERVICE_KEY?: string
   AIRKOREA_SERVICE_KEY?: string
   G2B_SERVICE_KEY?: string
+  LAW_OC?: string
+  /** @deprecated LAW_OC 사용 권장 */
   LAW_API_KEY?: string
   ECOS_API_KEY?: string
   OPINET_API_KEY?: string

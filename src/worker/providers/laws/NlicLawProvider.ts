@@ -6,13 +6,17 @@ const SEARCH_URL = 'https://www.law.go.kr/DRF/lawSearch.do'
 
 export class NlicLawProvider implements LawProvider {
   readonly source = 'live' as const
-  constructor(private apiKey: string) {}
+  private oc: string
+
+  constructor(oc: string) {
+    this.oc = oc
+  }
 
   async getLaws(lawNames: string[]): Promise<LawItem[]> {
     const results = await Promise.allSettled(
       lawNames.map(async (name) => {
         const url = new URL(SEARCH_URL)
-        url.searchParams.set('OC', this.apiKey)
+        url.searchParams.set('OC', this.oc)
         url.searchParams.set('target', 'law')
         url.searchParams.set('type', 'JSON')
         url.searchParams.set('query', name)
@@ -21,18 +25,18 @@ export class NlicLawProvider implements LawProvider {
         const res = await fetch(url.toString())
         if (!res.ok) throw new Error(`법제처 API 오류: ${res.status}`)
         const json: any = await res.json()
-        const law = json?.LawSearch?.law?.[0]
+        const lawResult = json?.LawSearch?.law
+        const law = Array.isArray(lawResult) ? lawResult[0] : lawResult
         if (!law) throw new Error(`법령 조회 결과 없음: ${name}`)
 
-        const lastAmended = law['시행일자'] ?? law['공포일자'] ?? ''
-        const effective = law['시행일자'] ?? ''
+        const lawName = law['법령명한글'] ?? name
         return {
           id: law['법령일련번호'] ?? name,
-          name: law['법령명한글'] ?? name,
+          name: lawName,
           lastAmendedDate: formatDate(law['공포일자']),
           effectiveDate: formatDate(law['시행일자']),
           changed: isRecentlyChanged(law['공포일자']),
-          url: law['법령상세링크'] ? `https://www.law.go.kr${law['법령상세링크']}` : undefined,
+          url: `https://www.law.go.kr/법령/${encodeURIComponent(lawName)}`,
         } as LawItem
       })
     )

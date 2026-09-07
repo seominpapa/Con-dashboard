@@ -19,13 +19,19 @@ test('VWorld geocoding is wired into site creation and admin integration metadat
   assert.match(credentials, /vworld:\s*\['apiKey'\]/)
 
   const sitesRoute = read('src/worker/routes/sites.ts')
+  const adminIntegrationsRoute = read('src/worker/routes/admin/integrations.ts')
+  const wranglerConfig = read('wrangler.jsonc')
   assert.match(sitesRoute, /VWorldGeocodingProvider/)
   assert.match(sitesRoute, /geocodeSiteAddress/)
+  assert.match(sitesRoute, /if \(!apiKey\) throw new VWorldApiError/)
   assert.match(sitesRoute, /app\.get\('\/address-search'/)
   assert.doesNotMatch(sitesRoute, /위도\/경도가 필요합니다/)
   assert.match(sitesRoute, /latLonToKmaGrid\(coords\.latitude,\s*coords\.longitude\)/)
   assert.match(sitesRoute, /MAX_ADDRESS_LENGTH/)
   assert.match(sitesRoute, /body\.address !== existing\.address/)
+  assert.match(sitesRoute, /err instanceof VWorldApiError/)
+  assert.match(adminIntegrationsRoute, /provider === 'vworld' \? new URL/)
+  assert.match(wranglerConfig, /"APP_BASE_URL": "https:\/\/construction-dashboard-2z9\.pages\.dev"/)
 
   const sitesPage = read('src/client/pages/SitesPage.tsx')
   assert.doesNotMatch(sitesPage, /placeholder="위도/)
@@ -89,6 +95,7 @@ test('VWorld address search returns normalized suggestions without exposing the 
     assert.equal(url.searchParams.get('type'), 'address')
     assert.equal(url.searchParams.get('category'), 'road')
     assert.equal(url.searchParams.get('key'), 'test-key')
+    assert.equal(url.searchParams.get('domain'), 'https://construction-dashboard-2z9.pages.dev')
     return new Response(JSON.stringify({
       response: {
         status: 'OK',
@@ -103,13 +110,102 @@ test('VWorld address search returns normalized suggestions without exposing the 
     }))
   }
   try {
-    const results = await new VWorldGeocodingProvider('test-key').search('경기도 안성시 양성면')
+    const results = await new VWorldGeocodingProvider('test-key', 'https://construction-dashboard-2z9.pages.dev').search('경기도 안성시 양성면')
     assert.deepEqual(results, [{
       address: '경기도 안성시 양성면 안성맞춤대로 1',
       roadAddress: '경기도 안성시 양성면 안성맞춤대로 1',
       parcelAddress: '경기도 안성시 양성면 동항리 1',
     }])
     assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld geocoding sends the registered domain and preserves safe API errors', async () => {
+  const originalFetch = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = async (input) => {
+    calls += 1
+    const url = new URL(String(input))
+    assert.equal(url.searchParams.get('domain'), 'https://construction-dashboard-2z9.pages.dev')
+    return new Response(JSON.stringify({
+      response: {
+        status: 'ERROR',
+        error: { code: 'INVALID_DOMAIN', text: 'upstream detail must not be exposed' },
+      },
+    }))
+  }
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider('test-key', 'https://construction-dashboard-2z9.pages.dev').geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.match(error.message, /등록된 서비스 URL/)
+        assert.doesNotMatch(error.message, /upstream detail/)
+        return true
+      },
+    )
+    assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld invalid-key errors never expose upstream details or the submitted key', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    response: {
+      status: 'ERROR',
+      error: { code: 'INVALID_KEY', text: 'secret-key-should-not-leak' },
+    },
+  }))
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider('secret-key-should-not-leak').geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.match(error.message, /인증키가 유효하지 않습니다/)
+        assert.doesNotMatch(error.message, /secret-key-should-not-leak/)
+        return true
+      },
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld maps a structured domain error even when the HTTP status is not successful', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    response: { status: 'ERROR', error: { code: 'INVALID_DOMAIN', text: 'internal upstream detail' } },
+  }), { status: 403 })
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.match(error.message, /등록된 서비스 URL/)
+        assert.doesNotMatch(error.message, /internal upstream detail/)
+        return true
+      },
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld unknown API errors use a safe fallback message', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    response: { status: 'ERROR', error: { code: 'UNKNOWN', text: 'internal upstream detail' } },
+  }))
+  try {
+    await assert.rejects(
+      () => new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
+      (error) => {
+        assert.equal(error.message, 'VWorld 주소 좌표 변환에 실패했습니다')
+        assert.doesNotMatch(error.message, /internal upstream detail/)
+        return true
+      },
+    )
   } finally {
     globalThis.fetch = originalFetch
   }

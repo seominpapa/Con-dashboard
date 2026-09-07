@@ -12,11 +12,31 @@ export interface AddressSearchResult {
 const API_URL = 'https://api.vworld.kr/req/address'
 const SEARCH_URL = 'https://api.vworld.kr/req/search'
 
+export class VWorldApiError extends Error {}
+
+function vworldError(json: any, fallback: string): VWorldApiError | null {
+  if (json?.response?.status !== 'ERROR') return null
+  const code = json?.response?.error?.code
+  if (code === 'INVALID_KEY') return new VWorldApiError('VWorld 인증키가 유효하지 않습니다. 인증키를 다시 확인해 주세요')
+  if (code === 'INVALID_DOMAIN') return new VWorldApiError('VWorld 인증키에 등록된 서비스 URL이 현재 사이트 주소와 일치하지 않습니다')
+  return new VWorldApiError(fallback)
+}
+
+async function readVWorldResponse(res: Response, fallback: string): Promise<any> {
+  const json = await res.json().catch(() => null)
+  const error = json && vworldError(json, fallback)
+  if (error) throw error
+  if (!res.ok || !json) throw new VWorldApiError(fallback)
+  return json
+}
+
 export class VWorldGeocodingProvider {
   private apiKey: string
+  private domain?: string
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, domain?: string) {
     this.apiKey = apiKey
+    this.domain = domain
   }
 
   async geocode(address: string): Promise<GeocodingResult> {
@@ -45,11 +65,10 @@ export class VWorldGeocodingProvider {
     url.searchParams.set('format', 'json')
     url.searchParams.set('address', address)
     url.searchParams.set('key', this.apiKey)
+    if (this.domain) url.searchParams.set('domain', this.domain)
 
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error('주소 좌표 변환에 실패했습니다')
-
-    const json: any = await res.json()
+    const json = await readVWorldResponse(res, 'VWorld 주소 좌표 변환에 실패했습니다')
     const point = json?.response?.result?.point
     const longitude = Number(point?.x)
     const latitude = Number(point?.y)
@@ -71,12 +90,10 @@ export class VWorldGeocodingProvider {
     url.searchParams.set('category', category)
     url.searchParams.set('format', 'json')
     url.searchParams.set('key', this.apiKey)
+    if (this.domain) url.searchParams.set('domain', this.domain)
 
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error('주소 검색에 실패했습니다')
-
-    const json: any = await res.json()
-    if (json?.response?.status === 'ERROR') throw new Error('주소 검색에 실패했습니다')
+    const json = await readVWorldResponse(res, 'VWorld 주소 검색에 실패했습니다')
     const items = Array.isArray(json?.response?.result?.items) ? json.response.result.items : []
     return items.flatMap((item: any) => {
       const roadAddress = typeof item?.address?.road === 'string' ? item.address.road.trim().slice(0, 200) : undefined
