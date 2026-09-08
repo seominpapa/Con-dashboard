@@ -132,14 +132,19 @@ test('public API connections accept an optional ISO expiry date and return its d
   assert.match(adminPage, /갱신/)
 })
 
-test('news is credential-free and Naver is not an admin-configurable public provider', () => {
+test('news is credential-free and the removed Naver News credential is not configurable', () => {
   for (const path of [
     'src/shared/types/integration.ts',
     'src/worker/integrations/publicCredentials.ts',
     'src/client/pages/admin/AdminIntegrationsPage.tsx',
     'src/worker/routes/admin/integrations.ts',
     'src/worker/providers/news/index.ts',
-  ]) assert.doesNotMatch(read(path), /naver|Naver|NAVER/)
+  ]) {
+    const source = read(path)
+    assert.doesNotMatch(source, /(?:^|[^_])'naver'(?:[^_]|$)/)
+    assert.doesNotMatch(source, /NAVER_CLIENT_(?:ID|SECRET)/)
+    assert.doesNotMatch(source, /NaverNewsProvider/)
+  }
 })
 
 test('briefing makes one news request and partitions up to three serious-accident items as fact-bound safety information', () => {

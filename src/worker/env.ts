@@ -27,7 +27,8 @@ export interface Bindings {
   LAW_API_KEY?: string
   ECOS_API_KEY?: string
   OPINET_API_KEY?: string
-  VWORLD_API_KEY?: string
+  NAVER_MAP_CLIENT_ID?: string
+  NAVER_MAP_CLIENT_SECRET?: string
   ITS_API_KEY?: string
 
   // ---- LLM Provider (관리자가 /admin/integrations/ai 에서 DB로 연결 관리, ENV는 폴백/초기값) ----

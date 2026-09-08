@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { after, test } from 'node:test'
 import { createServer } from 'vite'
-import { VWorldGeocodingProvider } from '../src/worker/providers/geocoding/VWorldGeocodingProvider.ts'
+import { NaverMapsGeocodingProvider } from '../src/worker/providers/geocoding/NaverMapsGeocodingProvider.ts'
 import { cacheGet, cacheGetStale, cacheSet, withCache } from '../src/worker/cache/memoryCache.ts'
 import { SettingsRepository } from '../src/worker/repositories/SettingsRepository.ts'
 
@@ -12,31 +12,42 @@ const { EcosExchangeRateProvider } = await vite.ssrLoadModule('/src/worker/provi
 const { default: adminIntegrations } = await vite.ssrLoadModule('/src/worker/routes/admin/integrations.ts')
 after(() => vite.close())
 
-test('VWorld geocoding is wired into site creation and admin integration metadata', () => {
-  assert.equal(existsSync(new URL('../src/worker/providers/geocoding/VWorldGeocodingProvider.ts', import.meta.url)), true)
+test('Naver Maps geocoding replaces VWorld in site creation and admin integration metadata', () => {
+  assert.equal(existsSync(new URL('../src/worker/providers/geocoding/NaverMapsGeocodingProvider.ts', import.meta.url)), true)
 
   const integrationTypes = read('src/shared/types/integration.ts')
-  assert.match(integrationTypes, /'vworld'/)
-  assert.match(integrationTypes, /VWORLD_API_KEY/)
-  assert.match(integrationTypes, /www\.vworld\.kr/)
+  assert.match(integrationTypes, /'naver_maps'/)
+  assert.match(integrationTypes, /NAVER_MAP_CLIENT_ID/)
+  assert.match(integrationTypes, /NAVER_MAP_CLIENT_SECRET/)
+  assert.doesNotMatch(integrationTypes, /'vworld'|VWORLD_API_KEY/)
 
   const credentials = read('src/worker/integrations/publicCredentials.ts')
-  assert.match(credentials, /vworld:\s*\['apiKey'\]/)
+  assert.match(credentials, /naver_maps:\s*\['clientId',\s*'clientSecret'\]/)
+  assert.doesNotMatch(credentials, /vworld|VWORLD/)
 
   const sitesRoute = read('src/worker/routes/sites.ts')
   const adminIntegrationsRoute = read('src/worker/routes/admin/integrations.ts')
-  const wranglerConfig = read('wrangler.jsonc')
-  assert.match(sitesRoute, /VWorldGeocodingProvider/)
+  const workerEnv = read('src/worker/env.ts')
+  const envExample = read('.env.example')
+  assert.match(workerEnv, /NAVER_MAP_CLIENT_ID\?: string/)
+  assert.match(workerEnv, /NAVER_MAP_CLIENT_SECRET\?: string/)
+  assert.doesNotMatch(workerEnv, /VWORLD_API_KEY/)
+  assert.match(envExample, /NAVER_MAP_CLIENT_ID=/)
+  assert.match(envExample, /NAVER_MAP_CLIENT_SECRET=/)
+  assert.doesNotMatch(envExample, /^NAVER_CLIENT_(?:ID|SECRET)=/m)
+  assert.match(sitesRoute, /NaverMapsGeocodingProvider/)
   assert.match(sitesRoute, /geocodeSiteAddress/)
-  assert.match(sitesRoute, /if \(!apiKey\) throw new VWorldApiError/)
+  assert.match(sitesRoute, /if \(!credential\) throw new NaverMapsApiError/)
   assert.match(sitesRoute, /app\.get\('\/address-search'/)
   assert.doesNotMatch(sitesRoute, /위도\/경도가 필요합니다/)
   assert.match(sitesRoute, /latLonToKmaGrid\(coords\.latitude,\s*coords\.longitude\)/)
   assert.match(sitesRoute, /MAX_ADDRESS_LENGTH/)
   assert.match(sitesRoute, /body\.address !== existing\.address/)
-  assert.match(sitesRoute, /err instanceof VWorldApiError/)
-  assert.match(adminIntegrationsRoute, /provider === 'vworld' \? new URL/)
-  assert.doesNotMatch(wranglerConfig, /"vars"\s*:\s*\{[^}]*"APP_BASE_URL"/s)
+  assert.match(sitesRoute, /err instanceof NaverMapsApiError/)
+  assert.match(adminIntegrationsRoute, /case 'naver_maps'/)
+  assert.match(adminIntegrationsRoute, /NAVER_MAP_CLIENT_ID/)
+  assert.match(adminIntegrationsRoute, /NAVER_MAP_CLIENT_SECRET/)
+  assert.doesNotMatch(adminIntegrationsRoute, /vworld|VWorld|VWORLD/)
 
   const sitesPage = read('src/client/pages/SitesPage.tsx')
   assert.doesNotMatch(sitesPage, /placeholder="위도/)
@@ -89,33 +100,31 @@ test('weather and air-quality routes resolve the stored site by siteId', () => {
   assert.doesNotMatch(airRoute, /latitude:\s*0/)
 })
 
-test('VWorld address search returns normalized suggestions without exposing the API key', async () => {
+test('Naver Maps address search sends headers and normalizes suggestions', async () => {
   const originalFetch = globalThis.fetch
   let calls = 0
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = async (input, init) => {
     calls += 1
     const url = new URL(String(input))
-    assert.equal(url.pathname, '/req/search')
+    assert.equal(url.pathname, '/map-geocode/v2/geocode')
     assert.equal(url.searchParams.get('query'), '경기도 안성시 양성면')
-    assert.equal(url.searchParams.get('type'), 'address')
-    assert.equal(url.searchParams.get('category'), 'road')
-    assert.equal(url.searchParams.get('key'), 'test-key')
-    assert.equal(url.searchParams.get('domain'), 'https://construction-dashboard-2z9.pages.dev')
+    assert.equal(url.searchParams.has('clientId'), false)
+    assert.equal(url.searchParams.has('clientSecret'), false)
+    const headers = new Headers(init?.headers)
+    assert.equal(headers.get('x-ncp-apigw-api-key-id'), 'test-client-id')
+    assert.equal(headers.get('x-ncp-apigw-api-key'), 'test-client-secret')
     return new Response(JSON.stringify({
-      response: {
-        status: 'OK',
-        result: {
-          items: [{
-            title: '<b>안성</b> 주소',
-            address: { road: '경기도 안성시 양성면 안성맞춤대로 1', parcel: '경기도 안성시 양성면 동항리 1' },
-            point: { x: '127.2', y: '37.1' },
-          }],
-        },
-      },
+      status: 'OK',
+      addresses: [{
+        roadAddress: '경기도 안성시 양성면 안성맞춤대로 1',
+        jibunAddress: '경기도 안성시 양성면 동항리 1',
+        x: '127.2',
+        y: '37.1',
+      }],
     }))
   }
   try {
-    const results = await new VWorldGeocodingProvider('test-key', 'https://construction-dashboard-2z9.pages.dev').search('경기도 안성시 양성면')
+    const results = await new NaverMapsGeocodingProvider('test-client-id', 'test-client-secret').search('경기도 안성시 양성면')
     assert.deepEqual(results, [{
       address: '경기도 안성시 양성면 안성맞춤대로 1',
       roadAddress: '경기도 안성시 양성면 안성맞춤대로 1',
@@ -127,172 +136,71 @@ test('VWorld address search returns normalized suggestions without exposing the 
   }
 })
 
-test('VWorld geocoding sends the registered domain and preserves safe API errors', async () => {
+test('Naver Maps geocoding normalizes coordinates and keeps credentials out of the URL', async () => {
   const originalFetch = globalThis.fetch
-  let calls = 0
-  globalThis.fetch = async (input) => {
-    calls += 1
+  globalThis.fetch = async (input, init) => {
     const url = new URL(String(input))
-    assert.equal(url.searchParams.get('domain'), 'https://construction-dashboard-2z9.pages.dev')
+    assert.equal(url.pathname, '/map-geocode/v2/geocode')
+    assert.equal(url.searchParams.get('query'), '서울특별시 중구 태평로1가')
+    assert.equal(url.searchParams.has('clientId'), false)
+    assert.equal(url.searchParams.has('clientSecret'), false)
+    const headers = new Headers(init?.headers)
+    assert.equal(headers.get('x-ncp-apigw-api-key-id'), 'test-client-id')
+    assert.equal(headers.get('x-ncp-apigw-api-key'), 'test-client-secret')
     return new Response(JSON.stringify({
-      response: {
-        status: 'ERROR',
-        error: { code: 'INVALID_DOMAIN', text: 'upstream detail must not be exposed' },
-      },
+      status: 'OK',
+      addresses: [{ roadAddress: '서울특별시 중구 세종대로 110', jibunAddress: '서울특별시 중구 태평로1가', x: '126.9779', y: '37.5663' }],
     }))
   }
   try {
-    await assert.rejects(
-      () => new VWorldGeocodingProvider('test-key', 'https://construction-dashboard-2z9.pages.dev').geocode('서울특별시 중구 태평로1가'),
-      (error) => {
-        assert.match(error.message, /등록된 서비스 URL/)
-        assert.doesNotMatch(error.message, /upstream detail/)
-        return true
-      },
-    )
-    assert.equal(calls, 1)
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
-test('VWorld geocoding retries one transient 5xx response and uses the succeeding response', async () => {
-  const originalFetch = globalThis.fetch
-  try {
-    for (const status of [502, 503, 504]) {
-      let calls = 0
-      globalThis.fetch = async () => {
-        calls += 1
-        return calls === 1
-          ? new Response('temporary upstream failure', { status })
-          : new Response(JSON.stringify({
-            response: { status: 'OK', result: { point: { x: '126.9779', y: '37.5663' } } },
-          }))
-      }
-      assert.deepEqual(
-        await new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
-        { latitude: 37.5663, longitude: 126.9779 },
-      )
-      assert.equal(calls, 2)
-    }
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
-test('VWorld invalid-key errors never expose upstream details or the submitted key', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    response: {
-      status: 'ERROR',
-      error: { code: 'INVALID_KEY', text: 'secret-key-should-not-leak' },
-    },
-  }))
-  try {
-    await assert.rejects(
-      () => new VWorldGeocodingProvider('secret-key-should-not-leak').geocode('서울특별시 중구 태평로1가'),
-      (error) => {
-        assert.match(error.message, /인증키가 유효하지 않습니다/)
-        assert.doesNotMatch(error.message, /secret-key-should-not-leak/)
-        return true
-      },
+    assert.deepEqual(
+      await new NaverMapsGeocodingProvider('test-client-id', 'test-client-secret').geocode('서울특별시 중구 태평로1가'),
+      { latitude: 37.5663, longitude: 126.9779 },
     )
   } finally {
     globalThis.fetch = originalFetch
   }
 })
 
-test('VWorld maps a structured domain error even when the HTTP status is not successful', async () => {
+test('Naver Maps rejects blank credentials before making a request', async () => {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    response: { status: 'ERROR', error: { code: 'INVALID_DOMAIN', text: 'internal upstream detail' } },
-  }), { status: 403 })
+  let calls = 0
+  globalThis.fetch = async () => {
+    calls += 1
+    return new Response(JSON.stringify({ status: 'OK', addresses: [] }))
+  }
   try {
     await assert.rejects(
-      () => new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
-      (error) => {
-        assert.match(error.message, /등록된 서비스 URL/)
-        assert.doesNotMatch(error.message, /internal upstream detail/)
-        return true
-      },
+      () => new NaverMapsGeocodingProvider(' ', ' ').geocode('서울시청'),
+      /인증 정보/,
     )
+    assert.equal(calls, 0)
   } finally {
     globalThis.fetch = originalFetch
   }
 })
 
-test('VWorld errors expose only an allowlisted diagnostic code', async () => {
+test('Naver Maps retries transient errors and never exposes credentials or upstream details', async () => {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    response: { status: 'ERROR', error: { code: 'SYSTEM_ERROR', text: 'internal upstream detail' } },
-  }))
-  try {
-    await assert.rejects(
-      () => new VWorldGeocodingProvider('secret-key-should-not-leak').geocode('서울특별시 중구 태평로1가'),
-      (error) => {
-        assert.match(error.message, /SYSTEM_ERROR/)
-        assert.doesNotMatch(error.message, /internal upstream detail/)
-        assert.doesNotMatch(error.message, /secret-key-should-not-leak/)
-        return true
-      },
-    )
-  } finally {
-    globalThis.fetch = originalFetch
+  let calls = 0
+  const signals = []
+  globalThis.fetch = async (_input, init) => {
+    calls += 1
+    signals.push(init?.signal)
+    if (calls === 1) return new Response('temporary internal detail', { status: 503 })
+    return new Response(JSON.stringify({ error: 'secret-value upstream detail' }), { status: 401 })
   }
-})
-
-test('VWorld errors never expose an API key echoed as the error code', async () => {
-  const originalFetch = globalThis.fetch
-  const submittedValue = 'UPSTREAM-ECHO-TEST'
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    response: { status: 'ERROR', error: { code: submittedValue, text: 'internal upstream detail' } },
-  }))
   try {
     await assert.rejects(
-      () => new VWorldGeocodingProvider(submittedValue).geocode('서울특별시 중구 태평로1가'),
+      () => new NaverMapsGeocodingProvider('client-id', 'secret-value').geocode('서울시청'),
       (error) => {
-        assert.doesNotMatch(error.message, new RegExp(submittedValue))
-        assert.doesNotMatch(error.message, /internal upstream detail/)
+        assert.match(error.message, /인증 정보/)
+        assert.doesNotMatch(error.message, /secret-value|upstream detail/)
         return true
       },
     )
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
-test('VWorld errors do not expose a non-allowlisted error code', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response(JSON.stringify({
-    response: { status: 'ERROR', error: { code: 'UPSTREAM_TIMEOUT-42', text: 'internal upstream detail' } },
-  }))
-  try {
-    await assert.rejects(
-      () => new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
-      (error) => {
-        assert.doesNotMatch(error.message, /UPSTREAM_TIMEOUT-42/)
-        assert.doesNotMatch(error.message, /internal upstream detail/)
-        return true
-      },
-    )
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
-test('VWorld non-JSON HTTP errors expose only the HTTP status', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response('upstream body must not be exposed', { status: 502 })
-  try {
-    await assert.rejects(
-      () => new VWorldGeocodingProvider('secret-key-should-not-leak').geocode('서울특별시 중구 태평로1가'),
-      (error) => {
-        assert.match(error.message, /HTTP 502/)
-        assert.doesNotMatch(error.message, /upstream body/)
-        assert.doesNotMatch(error.message, /secret-key-should-not-leak/)
-        return true
-      },
-    )
+    assert.equal(calls, 2)
+    assert.notEqual(signals[0], signals[1])
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -303,7 +211,7 @@ test('site address autocomplete is exposed through the authenticated sites API a
   const sitesPage = read('src/client/pages/SitesPage.tsx')
   assert.match(sitesRoute, /app\.get\('\/address-search'/)
   assert.match(sitesRoute, /query\.length < 2/)
-  assert.match(sitesRoute, /VWorld API Key를 먼저 설정/)
+  assert.match(sitesRoute, /NAVER Cloud Maps 인증 정보를 먼저 설정/)
   assert.match(sitesRoute, /503/)
   assert.match(sitesPage, /\/api\/sites\/address-search\?q=/)
   assert.match(sitesPage, /setTimeout/)
@@ -315,6 +223,8 @@ test('address search is cached and rate limited per approved user', async () => 
   const sitesRoute = read('src/worker/routes/sites.ts')
   assert.match(sitesRoute, /withCache/)
   assert.match(sitesRoute, /consumeFixedWindow/)
+  assert.match(sitesRoute, /site_geocode_rate:/)
+  assert.equal((sitesRoute.match(/consumeSiteGeocode\(c\.env, user\.id\)/g) ?? []).length, 2)
 
   const db = {
     prepare(sql) {
@@ -401,7 +311,15 @@ test('public API providers use their current authentication contracts', () => {
   assert.match(g2b, /resultCode\s*!==\s*'00'/)
   assert.match(opinet, /searchParams\.set\('certkey'/)
   assert.doesNotMatch(opinet, /searchParams\.set\('code'/)
-  assert.doesNotMatch(adminRoute, /naver|Naver|NAVER/)
+  assert.doesNotMatch(adminRoute, /case 'naver':/)
+})
+
+test('obsolete VWorld credentials are removed instead of being reused as Naver credentials', () => {
+  const migration = read('migrations/0004_remove_vworld.sql')
+  const deploy = read('.github/workflows/deploy.yml')
+  assert.match(migration, /DELETE FROM integrations WHERE provider = 'vworld'/)
+  assert.doesNotMatch(migration, /UPDATE integrations/)
+  assert.match(deploy, /d1 migrations apply construction-dashboard-production --remote/)
 })
 
 test('ECOS requests the daily cycle and accepts a valid StatisticSearch rate', async () => {

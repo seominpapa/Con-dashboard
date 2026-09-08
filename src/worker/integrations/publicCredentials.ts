@@ -7,7 +7,7 @@ const REQUIRED_FIELDS: Record<PublicApiProviderKey, readonly string[]> = {
   law: ['oc'],
   ecos: ['apiKey'],
   opinet: ['apiKey'],
-  vworld: ['apiKey'],
+  naver_maps: ['clientId', 'clientSecret'],
   its: ['apiKey'],
 }
 
@@ -18,7 +18,7 @@ const FAILURE_LABELS: Record<PublicApiProviderKey, string> = {
   law: '국가법령정보',
   ecos: '한국은행 ECOS',
   opinet: 'Opinet',
-  vworld: 'VWorld 주소 좌표 변환',
+  naver_maps: 'NAVER Cloud Maps 주소 검색',
   its: '국가교통정보센터(ITS)',
 }
 

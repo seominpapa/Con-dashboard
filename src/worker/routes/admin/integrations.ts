@@ -6,7 +6,7 @@ import { ok, fail } from '../../../shared/types/common'
 import { PUBLIC_API_PROVIDERS, type PublicApiProviderKey } from '../../../shared/types/integration'
 import type { Site } from '../../../shared/types/site'
 import { publicProviderFailureMessage, validatePublicCredential } from '../../integrations/publicCredentials'
-import { VWorldApiError, VWorldGeocodingProvider } from '../../providers/geocoding/VWorldGeocodingProvider'
+import { NaverMapsApiError, NaverMapsGeocodingProvider } from '../../providers/geocoding/NaverMapsGeocodingProvider'
 import { todayKeySeoul } from '../../../shared/utils/timezone'
 
 const app = new Hono<AppEnv>()
@@ -33,7 +33,7 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   law: ['LAW_OC'],
   ecos: ['ECOS_API_KEY'],
   opinet: ['OPINET_API_KEY'],
-  vworld: ['VWORLD_API_KEY'],
+  naver_maps: ['NAVER_MAP_CLIENT_ID', 'NAVER_MAP_CLIENT_SECRET'],
   its: ['ITS_API_KEY'],
 }
 
@@ -42,12 +42,17 @@ function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKe
     const oc = env.LAW_OC || env.LAW_API_KEY
     return oc ? { oc } : null
   }
+  if (provider === 'naver_maps') {
+    return env.NAVER_MAP_CLIENT_ID && env.NAVER_MAP_CLIENT_SECRET
+      ? { clientId: env.NAVER_MAP_CLIENT_ID, clientSecret: env.NAVER_MAP_CLIENT_SECRET }
+      : null
+  }
   const value = env[ENV_VAR_MAP[provider][0] as keyof AppEnv['Bindings']]
   return typeof value === 'string' && value ? { apiKey: value } : null
 }
 
 /** 폴백 없이 지정된 자격증명 자체로 최소 호출을 수행한다. */
-async function testPublicCredential(provider: PublicApiProviderKey, credential: Record<string, string>, domain: string): Promise<{ ok: boolean; message?: string }> {
+async function testPublicCredential(provider: PublicApiProviderKey, credential: Record<string, string>): Promise<{ ok: boolean; message?: string }> {
   try {
     switch (provider) {
       case 'kma': {
@@ -93,8 +98,8 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         }
         break
       }
-      case 'vworld': {
-        const p = new VWorldGeocodingProvider(credential.apiKey, domain)
+      case 'naver_maps': {
+        const p = new NaverMapsGeocodingProvider(credential.clientId, credential.clientSecret)
         await p.geocode(TEST_SITE.address)
         break
       }
@@ -108,7 +113,7 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
     }
     return { ok: true, message: '실제 API 연결 확인 완료' }
   } catch (error) {
-    if (provider === 'vworld' && error instanceof VWorldApiError) return { ok: false, message: error.message }
+    if (provider === 'naver_maps' && error instanceof NaverMapsApiError) return { ok: false, message: error.message }
     return { ok: false, message: publicProviderFailureMessage(provider) }
   }
 }
@@ -170,8 +175,7 @@ app.post('/:provider/connect', async (c) => {
   const validation = validatePublicCredential(provider, body.credential)
   if (!validation.valid) return c.json(fail(validation.message, 'live'), 400)
 
-  const domain = provider === 'vworld' ? new URL(c.env.APP_BASE_URL || c.req.url).origin : ''
-  const testResult = await testPublicCredential(provider, validation.credential, domain)
+  const testResult = await testPublicCredential(provider, validation.credential)
   if (!testResult.ok) return c.json(fail(testResult.message ?? '외부 API 연결에 실패했습니다', 'live'), 400)
 
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
@@ -204,8 +208,7 @@ app.post('/:provider/test', async (c) => {
   const validation = validatePublicCredential(provider, stored ?? getEnvCredential(c.env, provider))
   if (!validation.valid) return c.json(fail('연결된 자격증명이 없습니다', 'live'), 400)
 
-  const domain = provider === 'vworld' ? new URL(c.env.APP_BASE_URL || c.req.url).origin : ''
-  const testResult = await testPublicCredential(provider, validation.credential, domain)
+  const testResult = await testPublicCredential(provider, validation.credential)
   await repo.ensureRow(provider, 'public_api')
   await repo.recordCheckResult(provider, testResult.ok, testResult.ok ? undefined : testResult.message)
   return c.json(ok({ provider, testResult }, 'live'))

@@ -57,6 +57,12 @@ export function AdminIntegrationsPage() {
     if (provider === 'law') {
       return [{ key: 'oc', label: 'OC', placeholder: '공동활용 신청 시 발급된 API 인증값' }]
     }
+    if (provider === 'naver_maps') {
+      return [
+        { key: 'clientId', label: 'API Key ID', placeholder: 'x-ncp-apigw-api-key-id' },
+        { key: 'clientSecret', label: 'API Key', placeholder: 'x-ncp-apigw-api-key' },
+      ]
+    }
     return [{ key: 'apiKey', label: 'API Key', placeholder: '서비스 인증키' }]
   }
 
@@ -120,7 +126,7 @@ export function AdminIntegrationsPage() {
                 </p>
                 <p className="text-xs text-slate-400">
                   {meta.label}
-                  {r.dbConfigured ? ' · 관리자 등록됨' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : r.provider === 'its' ? ' · 미설정' : ' · 미설정 (Mock 사용 중)'}
+                  {r.dbConfigured ? ' · 관리자 등록됨' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ['its', 'naver_maps'].includes(r.provider) ? ' · 미설정' : ' · 미설정 (Mock 사용 중)'}
                   {r.lastError ? ` · ${r.lastError}` : ''}
                 </p>
                 <p className={cn('mt-0.5 text-[11px]', r.daysUntilExpiry !== null && r.daysUntilExpiry < 0 ? 'text-amber-600' : 'text-slate-400')}>
@@ -194,6 +200,9 @@ export function AdminIntegrationsPage() {
           )}
           {editing?.provider === 'its' && (
             <p className="text-[11px] text-slate-400">교통소통정보와 <a href="https://www.data.go.kr/data/15040465/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">돌발상황정보</a> 두 서비스 모두 활용신청한 API Key를 입력하세요.</p>
+          )}
+          {editing?.provider === 'naver_maps' && (
+            <p className="text-[11px] text-slate-400">Application에서 Geocoding을 선택하세요. <a href="https://www.ncloud.com/product/applicationService/maps?region=KR" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Geocoding은 월 300만 호출까지 무료</a>입니다.</p>
           )}
           {editing?.docsUrl && (
             <a href={editing.docsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">

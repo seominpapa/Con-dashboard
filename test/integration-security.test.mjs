@@ -27,6 +27,11 @@ test('public API credentials require exactly the provider fields', () => {
   assert.equal(validatePublicCredential('law', Object.fromEntries([['apiKey', 'legacy-field']])).valid, false)
   assert.equal(validatePublicCredential('law', { oc: '   ' }).valid, false)
   assert.equal(validatePublicCredential('kma', { apiKey: 'key', extra: 'unexpected' }).valid, false)
+  assert.deepEqual(validatePublicCredential('naver_maps', { clientId: ' map-id ', clientSecret: ' map-secret ' }), {
+    valid: true,
+    credential: { clientId: 'map-id', clientSecret: 'map-secret' },
+  })
+  assert.equal(validatePublicCredential('naver_maps', { apiKey: 'wrong-shape' }).valid, false)
   assert.equal(validatePublicCredential('kma', 'key').valid, false)
 })
 
