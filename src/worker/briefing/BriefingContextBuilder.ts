@@ -7,7 +7,6 @@ import { getBidProvider } from '../providers/bidding'
 import { getNewsProvider } from '../providers/news'
 import { getLawProvider } from '../providers/laws'
 import { getExchangeRateProvider } from '../providers/exchange'
-import { getOilPriceProvider } from '../providers/oil'
 import { getMaterialPriceProvider } from '../providers/materials'
 import { ScheduleRepository } from '../repositories/ScheduleRepository'
 import { TodoRepository } from '../repositories/TodoRepository'
@@ -41,7 +40,6 @@ export interface BriefingContext {
   seriousAccidents?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   laws?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   exchangeRates?: { data: unknown[]; freshness: 'fresh' | 'stale' }
-  oilPrices?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   materialPrices?: { data: unknown[]; freshness: 'fresh' | 'stale' }
 }
 
@@ -212,20 +210,6 @@ export async function buildBriefingContext(
           const provider = await getExchangeRateProvider(env)
           const rates = await provider.getRates(['USD'])
           context.exchangeRates = { data: rates, freshness: 'fresh' }
-        } catch {
-          /* noop */
-        }
-      })()
-    )
-  }
-
-  if (has('oilPrice')) {
-    tasks.push(
-      (async () => {
-        try {
-          const provider = await getOilPriceProvider(env)
-          const prices = await provider.getPrices(['dubai', 'domestic-diesel'])
-          context.oilPrices = { data: prices, freshness: 'fresh' }
         } catch {
           /* noop */
         }

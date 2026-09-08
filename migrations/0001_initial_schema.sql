@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 -- 자격증명은 반드시 암호화(encrypted_credential)하여 저장한다. 평문 저장 금지.
 CREATE TABLE IF NOT EXISTS integrations (
   id TEXT PRIMARY KEY,
-  provider TEXT UNIQUE NOT NULL,     -- kma, airkorea, g2b, law, ecos, opinet, naver_maps, its, claude, codex
+  provider TEXT UNIQUE NOT NULL,     -- kma, airkorea, g2b, law, ecos, naver_maps, its, claude, codex
   type TEXT NOT NULL,                -- public_api | ai_provider
   status TEXT NOT NULL DEFAULT 'DISCONNECTED', -- CONNECTED | DISCONNECTED | ERROR | EXPIRED | CHECKING
   encrypted_credential TEXT,         -- AES-GCM 암호화된 JSON (base64)
@@ -154,11 +154,11 @@ CREATE TABLE IF NOT EXISTS sites (
 );
 CREATE INDEX IF NOT EXISTS idx_sites_user ON sites(user_id);
 
--- 관심 입찰 필터, 관심 뉴스/법령/환율/유가/자재 (기획 26번 관심정보 설정)
+-- 관심 입찰 필터, 관심 뉴스/법령/환율/자재 (기획 26번 관심정보 설정)
 CREATE TABLE IF NOT EXISTS user_preferences (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  pref_type TEXT NOT NULL,   -- bid_filter | news_category | law | exchange | oil | material
+  pref_type TEXT NOT NULL,   -- bid_filter | news_category | law | exchange | material
   value_json TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

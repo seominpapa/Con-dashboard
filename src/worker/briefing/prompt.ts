@@ -5,7 +5,7 @@ import type { BriefingContext } from './BriefingContextBuilder'
  *
  * 핵심 원칙:
  * - 우선순위: 1)안전/특보/위험작업/긴급이슈 2)오늘일정/마감Todo/지연/공정지연
- *   3)입�찰마감/법령변경/정책 4)환율/유가/자재 5)일반뉴스
+ *   3)입�찰마감/법령변경/정책 4)환율/자재 5)일반뉴스
  * - 안전기준을 LLM이 임의로 단정하지 않는다 (Rule Engine=판단, LLM=설명/종합)
  * - 각 우선순위 항목에는 sourceWidgets(출처)를 반드시 포함한다
  * - stale 데이터는 현재값처럼 표현하지 않는다
@@ -22,7 +22,7 @@ export function buildSystemPrompt(): string {
    1순위: 안전, 기상특보, 위험작업, 긴급한 현장 이슈
    2순위: 오늘 일정, 오늘 마감 할일, 지연된 할일, 공정지연
    3순위: 입찰 마감임박, 법령 변경, 중요 건설정책
-   4순위: 환율, 유가, 자재가격 변동
+   4순위: 환율, 자재가격 변동
    5순위: 일반 건설뉴스
 4. Context에 데이터가 freshness: "stale"로 표시된 항목은 "최신 데이터가 아닐 수 있습니다"라고 언급하고, 마치 실시간 현재값인 것처럼 단정하지 마세요.
 5. 각 priorityItems 항목에는 반드시 sourceWidgets 배열(해당 정보의 근거가 된 위젯 키)을 포함하세요.
@@ -40,7 +40,7 @@ export function buildSystemPrompt(): string {
   "informationItems": [{"title": "...", "detail": "...", "sourceWidgets": ["constructionNews"]}]
 }
 
-사용 가능한 sourceWidgets 키: weather, weatherAlert, airQuality, calendar, todo, siteSummary, bidding, constructionNews, law, exchangeRate, oilPrice, materialPrice`
+사용 가능한 sourceWidgets 키: weather, weatherAlert, airQuality, calendar, todo, siteSummary, bidding, constructionNews, law, exchangeRate, materialPrice`
 }
 
 export function buildUserPrompt(context: BriefingContext): string {

@@ -9,7 +9,6 @@ import { LawWidget } from './LawWidget'
 import { ScheduleWidget } from './ScheduleWidget'
 import { TodoWidget } from './TodoWidget'
 import { ExchangeRateWidget } from './ExchangeRateWidget'
-import { OilPriceWidget } from './OilPriceWidget'
 import { MaterialPriceWidget } from './MaterialPriceWidget'
 import { MarketSummaryWidget } from './MarketSummaryWidget'
 import { AiBriefingWidget } from './AiBriefingWidget'
@@ -194,20 +193,6 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     supportsManualRefresh: true,
   },
   {
-    id: 'oilPrice',
-    title: '유가',
-    description: '국내외 유가(경유/휘발유/두바이유 등) 시세를 확인합니다',
-    category: '경제원가',
-    icon: 'Fuel',
-    component: OilPriceWidget,
-    defaultSize: { w: 1, h: 1 },
-    minSize: { w: 1, h: 1 },
-    maxSize: { w: 2, h: 2 },
-    refreshInterval: 45 * 60 * 1000,
-    supportsLocation: false,
-    supportsManualRefresh: true,
-  },
-  {
     id: 'materialPrice',
     title: '주요자재가격',
     description: '철근/시멘트/H형강 등 주요 자재가격을 확인합니다 (Mock 데이터)',
@@ -224,7 +209,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
   {
     id: 'marketSummary',
     title: '건설시장 종합',
-    description: '환율·유가·자재가격 핵심 지표를 한 눈에 확인합니다',
+    description: '환율·자재가격 핵심 지표를 한 눈에 확인합니다',
     category: '경제원가',
     icon: 'LineChart',
     component: MarketSummaryWidget,

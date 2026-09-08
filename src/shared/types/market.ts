@@ -1,4 +1,4 @@
-/** 경제·원가(환율/유가/자재가격) 도메인 모델 */
+/** 경제·원가(환율/자재가격) 도메인 모델 */
 import type { TrendDirection, TrendPoint } from './common'
 
 export type { TrendDirection, TrendPoint }
@@ -12,21 +12,6 @@ export interface ExchangeRateItem {
   direction: TrendDirection
   weeklyTrend: TrendPoint[]
   monthlyTrend: TrendPoint[]
-}
-
-export type OilKind = 'dubai' | 'wti' | 'brent' | 'domestic-diesel' | 'domestic-gasoline'
-
-export interface OilPriceItem {
-  kind: OilKind
-  label: string
-  unit: string
-  currency: string
-  price: number
-  changeValue: number
-  weeklyChangeRate: number
-  monthlyChangeRate: number
-  direction: TrendDirection
-  trend: TrendPoint[]
 }
 
 export interface MaterialPriceItem {
@@ -48,14 +33,6 @@ export interface MarketSummaryIndicator {
   changeRate: number
   direction: TrendDirection
   displayValue: string
-}
-
-export const OIL_KIND_LABEL: Record<OilKind, string> = {
-  dubai: 'Dubai',
-  wti: 'WTI',
-  brent: 'Brent',
-  'domestic-diesel': '국내 경유',
-  'domestic-gasoline': '국내 휘발유',
 }
 
 export const MATERIAL_CATALOG: { key: string; label: string; unit: string }[] = [

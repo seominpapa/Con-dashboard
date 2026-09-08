@@ -9,7 +9,6 @@ import biddingRoutes from './routes/bidding'
 import newsRoutes from './routes/news'
 import lawsRoutes from './routes/laws'
 import exchangeRatesRoutes from './routes/exchange-rates'
-import oilPricesRoutes from './routes/oil-prices'
 import materialPricesRoutes from './routes/material-prices'
 import siteSummaryRoutes from './routes/site-summary'
 import schedulesRoutes from './routes/schedules'
@@ -41,7 +40,6 @@ api.route('/bids', biddingRoutes)
 api.route('/news', newsRoutes)
 api.route('/laws', lawsRoutes)
 api.route('/exchange-rates', exchangeRatesRoutes)
-api.route('/oil-prices', oilPricesRoutes)
 api.route('/material-prices', materialPricesRoutes)
 api.route('/site-summary', siteSummaryRoutes)
 api.route('/schedules', schedulesRoutes)

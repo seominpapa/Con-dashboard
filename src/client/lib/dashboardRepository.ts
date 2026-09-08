@@ -64,7 +64,6 @@ export const DEFAULT_WIDGET_ORDER = [
   'constructionNews',
   'marketSummary',
   'exchangeRate',
-  'oilPrice',
   'materialPrice',
   'law',
 ]

@@ -32,7 +32,6 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   g2b: ['G2B_SERVICE_KEY'],
   law: ['LAW_OC'],
   ecos: ['ECOS_API_KEY'],
-  opinet: ['OPINET_API_KEY'],
   naver_maps: ['NAVER_MAP_CLIENT_ID', 'NAVER_MAP_CLIENT_SECRET'],
   its: ['ITS_API_KEY'],
 }
@@ -83,19 +82,6 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         const { EcosExchangeRateProvider } = await import('../../providers/exchange/EcosExchangeRateProvider')
         const p = new EcosExchangeRateProvider(credential.apiKey)
         await p.getRates(['USD'])
-        break
-      }
-      case 'opinet': {
-        const { OpinetEmptyDataError, OpinetOilPriceProvider } = await import('../../providers/oil/OpinetOilPriceProvider')
-        const p = new OpinetOilPriceProvider(credential.apiKey)
-        try {
-          await p.getPrices(['domestic-diesel'])
-        } catch (error) {
-          if (error instanceof OpinetEmptyDataError) {
-            return { ok: false, message: 'Opinet API 응답에 데이터가 없습니다. API 키가 유효하지 않거나 활용신청 승인이 되지 않았을 수 있습니다.' }
-          }
-          throw error
-        }
         break
       }
       case 'naver_maps': {

@@ -26,7 +26,6 @@ export interface Bindings {
   /** @deprecated LAW_OC 사용 권장 */
   LAW_API_KEY?: string
   ECOS_API_KEY?: string
-  OPINET_API_KEY?: string
   NAVER_MAP_CLIENT_ID?: string
   NAVER_MAP_CLIENT_SECRET?: string
   ITS_API_KEY?: string

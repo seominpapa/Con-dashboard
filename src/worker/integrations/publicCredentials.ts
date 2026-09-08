@@ -6,7 +6,6 @@ const REQUIRED_FIELDS: Record<PublicApiProviderKey, readonly string[]> = {
   g2b: ['apiKey'],
   law: ['oc'],
   ecos: ['apiKey'],
-  opinet: ['apiKey'],
   naver_maps: ['clientId', 'clientSecret'],
   its: ['apiKey'],
 }
@@ -17,7 +16,6 @@ const FAILURE_LABELS: Record<PublicApiProviderKey, string> = {
   g2b: '나라장터',
   law: '국가법령정보',
   ecos: '한국은행 ECOS',
-  opinet: 'Opinet',
   naver_maps: 'NAVER Cloud Maps 주소 검색',
   its: '국가교통정보센터(ITS)',
 }

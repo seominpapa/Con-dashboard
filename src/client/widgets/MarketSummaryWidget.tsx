@@ -4,7 +4,7 @@ import { LineChart, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { WidgetShell } from './WidgetShell'
 import { api } from '../lib/api'
 import type { WidgetProps } from '../../shared/types/widget'
-import type { ExchangeRateItem, OilPriceItem, MaterialPriceItem, TrendDirection } from '../../shared/types/market'
+import type { ExchangeRateItem, MaterialPriceItem, TrendDirection } from '../../shared/types/market'
 
 interface SummaryIndicator {
   key: string
@@ -21,8 +21,8 @@ const DIR_ICON: Record<TrendDirection, ReactElement> = {
 }
 
 /**
- * 건설시장 종합 - 환율/유가/자재가격 3개 API 응답을 조합해 핵심 지표만 뽑아 보여준다.
- * 별도 서버 라우트를 만들지 않고, 이미 존재하는 3개 위젯 API를 그대로 재사용한다.
+ * 건설시장 종합 - 환율/자재가격 API 응답을 조합해 핵심 지표만 뽑아 보여준다.
+ * 별도 서버 라우트를 만들지 않고 기존 위젯 API를 재사용한다.
  * (자재가격은 항상 Mock이므로 최종 결과도 부분적으로 mock 소스를 포함할 수 있다 -> mockBadge로 안내)
  */
 export function MarketSummaryWidget({}: WidgetProps) {
@@ -36,14 +36,13 @@ export function MarketSummaryWidget({}: WidgetProps) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [ex, oil, mat] = await Promise.all([
+    const [ex, mat] = await Promise.all([
       api.get<ExchangeRateItem[]>('/api/exchange-rates?codes=USD'),
-      api.get<OilPriceItem[]>('/api/oil-prices?kinds=dubai,domestic-diesel'),
       api.get<MaterialPriceItem[]>('/api/material-prices?keys=rebar,cement'),
     ])
     setLoading(false)
 
-    const failed = ex.status !== 'success' && oil.status !== 'success' && mat.status !== 'success'
+    const failed = ex.status !== 'success' && mat.status !== 'success'
     if (failed) {
       setError('시장 지표를 불러올 수 없습니다')
       if (hasDataRef.current) setStale(true)
@@ -53,8 +52,6 @@ export function MarketSummaryWidget({}: WidgetProps) {
     const next: SummaryIndicator[] = []
     const usd = ex.data?.[0]
     if (usd) next.push({ key: 'usd', label: '원/달러', displayValue: `${usd.rate.toLocaleString('ko-KR')}원`, changeRate: usd.changeRate, direction: usd.direction })
-    const diesel = oil.data?.find((o) => o.kind === 'domestic-diesel')
-    if (diesel) next.push({ key: 'diesel', label: '경유', displayValue: `${diesel.price.toLocaleString('ko-KR')}${diesel.unit}`, changeRate: diesel.weeklyChangeRate, direction: diesel.direction })
     const rebar = mat.data?.find((m) => m.materialKey === 'rebar')
     if (rebar) next.push({ key: 'rebar', label: '철근', displayValue: `${rebar.price.toLocaleString('ko-KR')}/${rebar.unit}`, changeRate: rebar.changeRate, direction: rebar.direction })
     const cement = mat.data?.find((m) => m.materialKey === 'cement')
@@ -64,7 +61,7 @@ export function MarketSummaryWidget({}: WidgetProps) {
     hasDataRef.current = true
     setError(null)
     setStale(false)
-    setIsMock([ex.source, oil.source, mat.source].includes('mock'))
+    setIsMock([ex.source, mat.source].includes('mock'))
     setUpdatedAt(new Date().toISOString())
   }, [])
 
