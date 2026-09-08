@@ -11,6 +11,8 @@ const OPINET_PRODCD: Record<string, string> = {
   'domestic-gasoline': 'B027',
 }
 
+export class OpinetEmptyDataError extends Error {}
+
 export class OpinetOilPriceProvider implements OilPriceProvider {
   readonly source = 'live' as const
   constructor(private apiKey: string) {}
@@ -23,7 +25,9 @@ export class OpinetOilPriceProvider implements OilPriceProvider {
     const res = await fetch(url.toString())
     if (!res.ok) throw new Error(`Opinet API error: ${res.status}`)
     const json: any = await res.json()
-    const rows: any[] = json?.RESULT?.OIL ?? []
+    if (!Array.isArray(json?.RESULT?.OIL)) throw new Error('Opinet: 응답 형식 오류')
+    const rows: any[] = json.RESULT.OIL
+    if (rows.length === 0) throw new OpinetEmptyDataError(`Opinet: ${kind} 데이터 없음`)
     const prodCode = OPINET_PRODCD[kind]
     const row = rows.find((r) => r.PRODCD === prodCode)
     if (!row) throw new Error(`Opinet: ${kind} 데이터 없음`)
@@ -55,6 +59,9 @@ export class OpinetOilPriceProvider implements OilPriceProvider {
     }
     const results = await Promise.allSettled(domesticKinds.map((k) => this.fetchDomestic(k)))
     const items = results.filter((r): r is PromiseFulfilledResult<OilPriceItem> => r.status === 'fulfilled').map((r) => r.value)
+    if (items.length === 0 && results.every((result) => result.status === 'rejected' && result.reason instanceof OpinetEmptyDataError)) {
+      throw new OpinetEmptyDataError('Opinet: 응답 데이터 없음')
+    }
     if (items.length === 0) throw new Error('Opinet: 모든 조회 실패')
     return items
   }

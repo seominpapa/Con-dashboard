@@ -7,7 +7,6 @@ const REQUIRED_FIELDS: Record<PublicApiProviderKey, readonly string[]> = {
   law: ['oc'],
   ecos: ['apiKey'],
   opinet: ['apiKey'],
-  naver: ['clientId', 'clientSecret'],
   vworld: ['apiKey'],
 }
 
@@ -18,7 +17,6 @@ const FAILURE_LABELS: Record<PublicApiProviderKey, string> = {
   law: '국가법령정보',
   ecos: '한국은행 ECOS',
   opinet: 'Opinet',
-  naver: '네이버 뉴스',
   vworld: 'VWorld 주소 좌표 변환',
 }
 
@@ -43,8 +41,7 @@ export function validatePublicCredential(provider: PublicApiProviderKey, input: 
 
   const fields = REQUIRED_FIELDS[provider]
   const entries = Object.entries(input as Record<string, unknown>)
-  const allowedFields = provider === 'naver' ? [...fields, 'apiType'] : fields
-  if (entries.some(([key]) => !allowedFields.includes(key))) {
+  if (entries.some(([key]) => !fields.includes(key))) {
     return { valid: false, message: '허용되지 않은 자격증명 필드가 포함되어 있습니다' }
   }
 
@@ -55,12 +52,6 @@ export function validatePublicCredential(provider: PublicApiProviderKey, input: 
       return { valid: false, message: '필수 자격증명을 모두 입력해 주세요' }
     }
     credential[field] = value.trim()
-  }
-
-  if (provider === 'naver') {
-    const apiType = (input as Record<string, unknown>).apiType ?? 'legacy'
-    if (apiType !== 'apiHub' && apiType !== 'legacy') return { valid: false, message: '네이버 API 유형이 올바르지 않습니다' }
-    credential.apiType = apiType
   }
 
   return { valid: true, credential }

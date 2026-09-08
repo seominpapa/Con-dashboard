@@ -4,6 +4,7 @@ export type NewsCategory =
   | '건설정책'
   | 'SOC'
   | '건설안전'
+  | '중대재해'
   | '건설사'
   | '수주'
   | '부동산'

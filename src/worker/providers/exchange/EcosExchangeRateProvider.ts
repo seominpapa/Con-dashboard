@@ -27,7 +27,7 @@ export class EcosExchangeRateProvider implements ExchangeRateProvider {
   private async fetchSeries(itemCode: string, days: number): Promise<{ date: string; value: number }[]> {
     const end = new Date()
     const start = new Date(end.getTime() - days * 86400000)
-    const url = `${BASE_URL}/StatisticSearch/${this.apiKey}/json/kr/1/${days}/${STAT_CODE}/DD/${fmtDate(start)}/${fmtDate(end)}/${itemCode}`
+    const url = `${BASE_URL}/StatisticSearch/${this.apiKey}/json/kr/1/${days}/${STAT_CODE}/D/${fmtDate(start)}/${fmtDate(end)}/${itemCode}`
 
     const res = await fetch(url)
     if (!res.ok) throw new Error(`ECOS API error: ${res.status}`)

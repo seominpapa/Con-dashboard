@@ -15,6 +15,8 @@ interface IntegrationRow {
   envFallbackAvailable: boolean
   dbConfigured: boolean
   docsUrl?: string
+  expiresAt: string | null
+  daysUntilExpiry: number | null
 }
 
 const STATUS_META: Record<IntegrationRow['status'], { label: string; icon: any; cls: string }> = {
@@ -35,6 +37,7 @@ export function AdminIntegrationsPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<IntegrationRow | null>(null)
   const [credInputs, setCredInputs] = useState<Record<string, string>>({})
+  const [expiresAt, setExpiresAt] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,12 +54,6 @@ export function AdminIntegrationsPage() {
   }, [])
 
   function fieldsFor(provider: string): { key: string; label: string; placeholder: string }[] {
-    if (provider === 'naver') {
-      return [
-        { key: 'clientId', label: 'Client ID', placeholder: 'Naver Client ID' },
-        { key: 'clientSecret', label: 'Client Secret', placeholder: 'Naver Client Secret' },
-      ]
-    }
     if (provider === 'law') {
       return [{ key: 'oc', label: 'OC', placeholder: '공동활용 신청 시 발급된 API 인증값' }]
     }
@@ -67,7 +64,10 @@ export function AdminIntegrationsPage() {
     if (!editing) return
     setBusy(editing.provider)
     setError(null)
-    const res = await api.post(`/api/admin/integrations/${editing.provider}/connect`, { credential: credInputs })
+    const res = await api.post(`/api/admin/integrations/${editing.provider}/connect`, {
+      credential: credInputs,
+      expiresAt: expiresAt || null,
+    })
     setBusy(null)
     if (res.status === 'error') {
       setError(res.message ?? '연결에 실패했습니다')
@@ -75,6 +75,7 @@ export function AdminIntegrationsPage() {
     }
     setEditing(null)
     setCredInputs({})
+    setExpiresAt('')
     await load()
   }
 
@@ -122,6 +123,11 @@ export function AdminIntegrationsPage() {
                   {r.dbConfigured ? ' · 관리자 등록됨' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ' · 미설정 (Mock 사용 중)'}
                   {r.lastError ? ` · ${r.lastError}` : ''}
                 </p>
+                <p className={cn('mt-0.5 text-[11px]', r.daysUntilExpiry !== null && r.daysUntilExpiry < 0 ? 'text-amber-600' : 'text-slate-400')}>
+                  {r.expiresAt
+                    ? `만료일 ${r.expiresAt} · ${r.daysUntilExpiry! < 0 ? '만료됨' : r.daysUntilExpiry === 0 ? '오늘 만료' : `남은 ${r.daysUntilExpiry}일`}`
+                    : '만료일 미설정'}
+                </p>
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <button
@@ -134,11 +140,12 @@ export function AdminIntegrationsPage() {
                 <button
                   onClick={() => {
                     setEditing(r)
-                    setCredInputs(r.provider === 'naver' ? { apiType: 'apiHub' } : {})
+                    setCredInputs({})
+                    setExpiresAt(r.expiresAt ?? '')
                   }}
                   className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
                 >
-                  {r.dbConfigured ? '자격증명 변경' : '연결하기'}
+                  {r.dbConfigured ? '갱신/변경' : '연결하기'}
                 </button>
                 {r.dbConfigured && (
                   <button onClick={() => handleDisconnect(r.provider)} className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-500">
@@ -167,20 +174,17 @@ export function AdminIntegrationsPage() {
                 />
               </div>
             ))}
-          {editing?.provider === 'naver' && (
-            <div>
-              <label htmlFor="naver-api-type" className="mb-1 block text-xs font-medium text-slate-500">API 유형</label>
-              <select
-                id="naver-api-type"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                value={credInputs.apiType ?? 'apiHub'}
-                onChange={(event) => setCredInputs({ ...credInputs, apiType: event.target.value })}
-              >
-                <option value="apiHub">NAVER API HUB (신규)</option>
-                <option value="legacy">Naver Developers (기존 키)</option>
-              </select>
-            </div>
-          )}
+          <div>
+            <label htmlFor="integration-expiry" className="mb-1 block text-xs font-medium text-slate-500">API Key 만료일 (선택)</label>
+            <input
+              id="integration-expiry"
+              type="date"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              value={expiresAt}
+              onChange={(event) => setExpiresAt(event.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">발급 사이트에 표시된 만료일을 입력하면 갱신 시점을 안내합니다.</p>
+          </div>
           <p className="text-[11px] text-slate-400">저장 즉시 실제 연결 테스트가 수행됩니다. 값은 암호화되어 저장되며 이후 다시 조회할 수 없습니다.</p>
           {editing && ['kma', 'airkorea', 'g2b'].includes(editing.provider) && (
             <p className="text-[11px] text-slate-400">공공데이터포털의 인코딩 또는 디코딩 인증키를 모두 사용할 수 있습니다.</p>

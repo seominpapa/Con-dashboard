@@ -18,16 +18,24 @@ interface IntegrationRow {
 }
 
 function rowToSummary(row: IntegrationRow): IntegrationSummary {
+  let metadata: Record<string, unknown> | null = null
+  try {
+    metadata = row.metadata ? JSON.parse(row.metadata) : null
+  } catch {
+    metadata = null
+  }
+  const expiresAt = typeof metadata?.expiresAt === 'string' ? metadata.expiresAt : null
   return {
     provider: row.provider,
     type: row.type,
     status: row.status,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+    metadata,
     connectedAt: row.connected_at,
     lastCheckedAt: row.last_checked_at,
     lastSuccessAt: row.last_success_at,
     lastError: row.last_error,
     updatedBy: row.updated_by,
+    expiresAt,
     envFallbackAvailable: false, // 호출부에서 채움
   }
 }

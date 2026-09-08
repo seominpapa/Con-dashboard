@@ -38,6 +38,7 @@ export interface BriefingContext {
   siteSummary?: { data: unknown; freshness: 'fresh' | 'stale' }
   bidding?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   news?: { data: unknown[]; freshness: 'fresh' | 'stale' }
+  seriousAccidents?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   laws?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   exchangeRates?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   oilPrices?: { data: unknown[]; freshness: 'fresh' | 'stale' }
@@ -177,8 +178,11 @@ export async function buildBriefingContext(
       (async () => {
         try {
           const provider = await getNewsProvider(env)
-          const news = await provider.getNews([], 5) // 중요기사 최대 5개 (기획 50번)
-          context.news = { data: news, freshness: 'fresh' }
+          const items = await provider.getNews([], 20)
+          const seriousAccidents = items.filter((news) => news.category === '중대재해').slice(0, 3)
+          const news = items.filter((news) => news.category !== '중대재해').slice(0, 5)
+          if (news.length > 0) context.news = { data: news, freshness: 'fresh' }
+          if (seriousAccidents.length > 0) context.seriousAccidents = { data: seriousAccidents, freshness: 'fresh' }
         } catch {
           /* noop */
         }

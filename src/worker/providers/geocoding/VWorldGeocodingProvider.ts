@@ -31,6 +31,11 @@ async function readVWorldResponse(res: Response, fallback: string): Promise<any>
   return json
 }
 
+async function fetchVWorld(url: string): Promise<Response> {
+  const response = await fetch(url)
+  return [502, 503, 504].includes(response.status) ? fetch(url) : response
+}
+
 export class VWorldGeocodingProvider {
   private apiKey: string
   private domain?: string
@@ -68,7 +73,7 @@ export class VWorldGeocodingProvider {
     url.searchParams.set('key', this.apiKey)
     if (this.domain) url.searchParams.set('domain', this.domain)
 
-    const res = await fetch(url.toString())
+    const res = await fetchVWorld(url.toString())
     const json = await readVWorldResponse(res, 'VWorld 주소 좌표 변환에 실패했습니다')
     const point = json?.response?.result?.point
     const longitude = Number(point?.x)
@@ -93,7 +98,7 @@ export class VWorldGeocodingProvider {
     url.searchParams.set('key', this.apiKey)
     if (this.domain) url.searchParams.set('domain', this.domain)
 
-    const res = await fetch(url.toString())
+    const res = await fetchVWorld(url.toString())
     const json = await readVWorldResponse(res, 'VWorld 주소 검색에 실패했습니다')
     const items = Array.isArray(json?.response?.result?.items) ? json.response.result.items : []
     return items.flatMap((item: any) => {

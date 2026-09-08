@@ -39,6 +39,9 @@ export function NewsPage() {
           ))}
         </ul>
       )}
+      <p className="mt-3 text-[11px] text-slate-400">
+        뉴스 데이터: <a href="https://www.gdeltproject.org/" target="_blank" rel="noreferrer" className="hover:text-blue-600 hover:underline">GDELT Project</a> 및 고용노동부 공식 RSS
+      </p>
     </div>
   )
 }

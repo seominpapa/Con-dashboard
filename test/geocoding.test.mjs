@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
-import { test } from 'node:test'
+import { after, test } from 'node:test'
+import { createServer } from 'vite'
 import { VWorldGeocodingProvider } from '../src/worker/providers/geocoding/VWorldGeocodingProvider.ts'
 import { cacheGet, cacheGetStale, cacheSet, withCache } from '../src/worker/cache/memoryCache.ts'
 import { SettingsRepository } from '../src/worker/repositories/SettingsRepository.ts'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+const vite = await createServer({ appType: 'custom', logLevel: 'error' })
+const { EcosExchangeRateProvider } = await vite.ssrLoadModule('/src/worker/providers/exchange/EcosExchangeRateProvider.ts')
+const { default: adminIntegrations } = await vite.ssrLoadModule('/src/worker/routes/admin/integrations.ts')
+after(() => vite.close())
 
 test('VWorld geocoding is wired into site creation and admin integration metadata', () => {
   assert.equal(existsSync(new URL('../src/worker/providers/geocoding/VWorldGeocodingProvider.ts', import.meta.url)), true)
@@ -146,6 +151,30 @@ test('VWorld geocoding sends the registered domain and preserves safe API errors
       },
     )
     assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('VWorld geocoding retries one transient 5xx response and uses the succeeding response', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    for (const status of [502, 503, 504]) {
+      let calls = 0
+      globalThis.fetch = async () => {
+        calls += 1
+        return calls === 1
+          ? new Response('temporary upstream failure', { status })
+          : new Response(JSON.stringify({
+            response: { status: 'OK', result: { point: { x: '126.9779', y: '37.5663' } } },
+          }))
+      }
+      assert.deepEqual(
+        await new VWorldGeocodingProvider('test-key').geocode('서울특별시 중구 태평로1가'),
+        { latitude: 37.5663, longitude: 126.9779 },
+      )
+      assert.equal(calls, 2)
+    }
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -362,7 +391,6 @@ test('public API providers use their current authentication contracts', () => {
   const airKorea = read('src/worker/providers/air-quality/AirKoreaProvider.ts')
   const g2b = read('src/worker/providers/bidding/G2bBidProvider.ts')
   const opinet = read('src/worker/providers/oil/OpinetOilPriceProvider.ts')
-  const naver = read('src/worker/providers/news/NaverNewsProvider.ts')
 
   assert.match(kma, /normalizeDataGoKrServiceKey/)
   assert.match(airKorea, /normalizeDataGoKrServiceKey/)
@@ -373,9 +401,93 @@ test('public API providers use their current authentication contracts', () => {
   assert.match(g2b, /resultCode\s*!==\s*'00'/)
   assert.match(opinet, /searchParams\.set\('certkey'/)
   assert.doesNotMatch(opinet, /searchParams\.set\('code'/)
-  assert.match(naver, /naverapihub\.apigw\.ntruss\.com/)
-  assert.match(naver, /X-NCP-APIGW-API-KEY-ID/)
-  assert.doesNotMatch(naver, /res\.status === 401 \|\| res\.status === 403/)
-  assert.match(adminRoute, /credential\.apiType/)
-  assert.match(adminRoute, /getNews\(\['건설정책'\],\s*1\)/)
+  assert.doesNotMatch(adminRoute, /naver|Naver|NAVER/)
+})
+
+test('ECOS requests the daily cycle and accepts a valid StatisticSearch rate', async () => {
+  const originalFetch = globalThis.fetch
+  let cycle
+  globalThis.fetch = async (input) => {
+    const parts = new URL(String(input)).pathname.split('/')
+    cycle = parts[9]
+    return new Response(JSON.stringify({
+      StatisticSearch: { row: [{ TIME: '20260908', DATA_VALUE: '1388.70' }] },
+    }))
+  }
+  try {
+    const [usd] = await new EcosExchangeRateProvider('test-key').getRates(['USD'])
+    assert.equal(cycle, 'D')
+    assert.equal(usd.rate, 1388.7)
+    assert.equal(usd.pairLabel, 'USD/KRW')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('Opinet connection rejects empty upstream data with a safe approval hint', async () => {
+  const originalFetch = globalThis.fetch
+  const submittedKey = 'submitted-key-must-not-leak'
+  const upstreamBody = 'upstream-body-must-not-leak'
+  globalThis.fetch = async () => new Response(JSON.stringify({ RESULT: { OIL: [], detail: upstreamBody } }), { status: 200 })
+  try {
+    const response = await adminIntegrations.request('https://dashboard.example.com/opinet/connect', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credential: { apiKey: submittedKey } }),
+    })
+    const body = await response.json()
+    assert.equal(response.status, 400)
+    assert.equal(body.message, 'Opinet API 응답에 데이터가 없습니다. API 키가 유효하지 않거나 활용신청 승인이 되지 않았을 수 있습니다.')
+    assert.doesNotMatch(body.message, new RegExp(submittedKey))
+    assert.doesNotMatch(body.message, new RegExp(upstreamBody))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('Opinet connection treats only an explicit empty OIL list as an approval hint', async () => {
+  const originalFetch = globalThis.fetch
+  const submittedKey = 'submitted-key-must-not-leak'
+  const upstreamBody = 'upstream-body-must-not-leak'
+  const genericMessage = 'Opinet API 연결 확인에 실패했습니다. API 키와 해당 서비스의 활용신청 승인 상태를 확인해 주세요'
+  try {
+    for (const payload of [{}, { RESULT: {} }, { RESULT: { OIL: null } }]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({ ...payload, detail: upstreamBody }), { status: 200 })
+      const response = await adminIntegrations.request('https://dashboard.example.com/opinet/connect', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ credential: { apiKey: submittedKey } }),
+      })
+      const body = await response.json()
+      assert.equal(response.status, 400)
+      assert.equal(body.message, genericMessage)
+      assert.doesNotMatch(body.message, new RegExp(submittedKey))
+      assert.doesNotMatch(body.message, new RegExp(upstreamBody))
+    }
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('Opinet connection keeps a non-empty list without diesel on the generic failure message', async () => {
+  const originalFetch = globalThis.fetch
+  const submittedKey = 'submitted-key-must-not-leak'
+  const upstreamBody = 'upstream-body-must-not-leak'
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    RESULT: { OIL: [{ PRODCD: 'B027' }], detail: upstreamBody },
+  }), { status: 200 })
+  try {
+    const response = await adminIntegrations.request('https://dashboard.example.com/opinet/connect', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credential: { apiKey: submittedKey } }),
+    })
+    const body = await response.json()
+    assert.equal(response.status, 400)
+    assert.equal(body.message, 'Opinet API 연결 확인에 실패했습니다. API 키와 해당 서비스의 활용신청 승인 상태를 확인해 주세요')
+    assert.doesNotMatch(body.message, new RegExp(submittedKey))
+    assert.doesNotMatch(body.message, new RegExp(upstreamBody))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })

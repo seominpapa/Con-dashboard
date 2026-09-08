@@ -20,16 +20,6 @@ test('public API credentials require exactly the provider fields', () => {
     valid: true,
     credential: { apiKey: 'key-123' },
   })
-  assert.deepEqual(validatePublicCredential('naver', { clientId: 'id', clientSecret: 'secret' }), {
-    valid: true,
-    credential: { clientId: 'id', clientSecret: 'secret', apiType: 'legacy' },
-  })
-  assert.deepEqual(validatePublicCredential('naver', { clientId: 'id', clientSecret: 'secret', apiType: 'apiHub' }), {
-    valid: true,
-    credential: { clientId: 'id', clientSecret: 'secret', apiType: 'apiHub' },
-  })
-  assert.equal(validatePublicCredential('naver', { clientId: 'id', clientSecret: 'secret', apiType: 'other' }).valid, false)
-  assert.equal(validatePublicCredential('naver', { clientId: 'id' }).valid, false)
   assert.deepEqual(validatePublicCredential('law', { oc: '  law-user-id  ' }), {
     valid: true,
     credential: { oc: 'law-user-id' },
@@ -48,7 +38,6 @@ test('data.go.kr encoded and decoded service keys are both accepted', () => {
 
 test('public provider failures do not expose upstream response details', () => {
   assert.match(publicProviderFailureMessage('kma'), /^기상청 API 연결 확인에 실패했습니다/)
-  assert.match(publicProviderFailureMessage('naver'), /^네이버 뉴스 API 연결 확인에 실패했습니다/)
   assert.match(publicProviderFailureMessage('law'), /OC와 공동활용 신청 승인 상태/)
 })
 

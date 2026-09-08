@@ -3,7 +3,7 @@
 export type IntegrationStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'EXPIRED' | 'CHECKING'
 export type IntegrationType = 'public_api' | 'ai_provider'
 
-export type PublicApiProviderKey = 'kma' | 'airkorea' | 'g2b' | 'law' | 'ecos' | 'opinet' | 'naver' | 'vworld'
+export type PublicApiProviderKey = 'kma' | 'airkorea' | 'g2b' | 'law' | 'ecos' | 'opinet' | 'vworld'
 export type AiProviderKey = 'claude' | 'codex'
 
 export const OPENAI_MODELS = ['gpt-5.1', 'gpt-5.6', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-4.1'] as const
@@ -20,6 +20,8 @@ export interface IntegrationSummary {
   lastSuccessAt?: string | null
   lastError?: string | null
   updatedBy?: string | null
+  expiresAt?: string | null
+  daysUntilExpiry?: number | null
   /** 서버 환경변수로도 설정 가능한 provider인지 (관리자 DB 미설정 시 ENV로 자동 폴백됨을 안내) */
   envFallbackAvailable: boolean
 }
@@ -31,7 +33,6 @@ export const PUBLIC_API_PROVIDERS: { key: PublicApiProviderKey; label: string; e
   { key: 'law', label: '국가법령정보', envVar: 'LAW_OC', docsUrl: 'https://open.law.go.kr/LSO/usrJoin.do' },
   { key: 'ecos', label: '환율(한국은행 ECOS)', envVar: 'ECOS_API_KEY', docsUrl: 'https://ecos.bok.or.kr/api/' },
   { key: 'opinet', label: '유가(Opinet)', envVar: 'OPINET_API_KEY', docsUrl: 'https://www.opinet.co.kr/user/custapi/openApiIntro.do' },
-  { key: 'naver', label: '네이버 뉴스(보완)', envVar: 'NAVER_CLIENT_ID/SECRET', docsUrl: 'https://console.ncloud.com/naver-api-hub' },
   { key: 'vworld', label: 'VWorld 주소 좌표 변환', envVar: 'VWORLD_API_KEY', docsUrl: 'https://www.vworld.kr/dtna/dtna_apiSvcFc_s001.do' },
 ]
 

@@ -27,7 +27,8 @@ export function buildSystemPrompt(): string {
 4. Context에 데이터가 freshness: "stale"로 표시된 항목은 "최신 데이터가 아닐 수 있습니다"라고 언급하고, 마치 실시간 현재값인 것처럼 단정하지 마세요.
 5. 각 priorityItems 항목에는 반드시 sourceWidgets 배열(해당 정보의 근거가 된 위젯 키)을 포함하세요.
 6. Context에 없는 위젯 데이터에 대해서는 절대 언급하지 마세요.
-7. 반드시 아래 JSON 스키마와 정확히 일치하는 JSON만 출력하세요. 다른 설명 텍스트는 포함하지 마세요.
+7. seriousAccidents의 중대재해 항목은 우선순위가 높은 안전 정보입니다. 제목, 출처, 날짜, 링크에 적힌 사실만 요약하고, Context에 없는 사고 원인·법적 책임·예방 조치를 지어내지 마세요. sourceWidgets에는 "constructionNews"를 사용하세요.
+8. 반드시 아래 JSON 스키마와 정확히 일치하는 JSON만 출력하세요. 다른 설명 텍스트는 포함하지 마세요.
 
 출력 JSON 스키마:
 {

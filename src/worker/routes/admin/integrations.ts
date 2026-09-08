@@ -7,6 +7,7 @@ import { PUBLIC_API_PROVIDERS, type PublicApiProviderKey } from '../../../shared
 import type { Site } from '../../../shared/types/site'
 import { publicProviderFailureMessage, validatePublicCredential } from '../../integrations/publicCredentials'
 import { VWorldApiError, VWorldGeocodingProvider } from '../../providers/geocoding/VWorldGeocodingProvider'
+import { todayKeySeoul } from '../../../shared/utils/timezone'
 
 const app = new Hono<AppEnv>()
 
@@ -32,16 +33,10 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   law: ['LAW_OC'],
   ecos: ['ECOS_API_KEY'],
   opinet: ['OPINET_API_KEY'],
-  naver: ['NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET'],
   vworld: ['VWORLD_API_KEY'],
 }
 
 function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKey): Record<string, string> | null {
-  if (provider === 'naver') {
-    return env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET
-      ? { clientId: env.NAVER_CLIENT_ID, clientSecret: env.NAVER_CLIENT_SECRET }
-      : null
-  }
   if (provider === 'law') {
     const oc = env.LAW_OC || env.LAW_API_KEY
     return oc ? { oc } : null
@@ -85,15 +80,16 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         break
       }
       case 'opinet': {
-        const { OpinetOilPriceProvider } = await import('../../providers/oil/OpinetOilPriceProvider')
+        const { OpinetEmptyDataError, OpinetOilPriceProvider } = await import('../../providers/oil/OpinetOilPriceProvider')
         const p = new OpinetOilPriceProvider(credential.apiKey)
-        await p.getPrices(['domestic-diesel'])
-        break
-      }
-      case 'naver': {
-        const { NaverNewsProvider } = await import('../../providers/news/NaverNewsProvider')
-        const p = new NaverNewsProvider(credential.clientId, credential.clientSecret, credential.apiType === 'apiHub' ? 'apiHub' : 'legacy')
-        await p.getNews(['건설정책'], 1)
+        try {
+          await p.getPrices(['domestic-diesel'])
+        } catch (error) {
+          if (error instanceof OpinetEmptyDataError) {
+            return { ok: false, message: 'Opinet API 응답에 데이터가 없습니다. API 키가 유효하지 않거나 활용신청 승인이 되지 않았을 수 있습니다.' }
+          }
+          throw error
+        }
         break
       }
       case 'vworld': {
@@ -109,6 +105,18 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
   }
 }
 
+function parseExpiryDate(value: unknown): { valid: true; value: string | null } | { valid: false } {
+  if (value === undefined || value === null || value === '') return { valid: true, value: null }
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return { valid: false }
+  const date = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return { valid: false }
+  return { valid: true, value }
+}
+
+function daysBetweenDateKeys(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86400000)
+}
+
 // GET /api/admin/integrations - 공공데이터 Provider 전체 연결 상태
 app.get('/', async (c) => {
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
@@ -118,18 +126,24 @@ app.get('/', async (c) => {
   const result = PUBLIC_API_PROVIDERS.map((p) => {
     const summary = byProvider.get(p.key)
     const envFallbackAvailable = Boolean(getEnvCredential(c.env, p.key))
+    const expiresAt = summary?.expiresAt ?? null
+    const daysUntilExpiry = expiresAt ? daysBetweenDateKeys(todayKeySeoul(), expiresAt) : null
     return {
       provider: p.key,
       label: p.label,
       envVar: p.envVar,
       docsUrl: p.docsUrl,
-      status: summary?.status ?? (envFallbackAvailable ? 'CONNECTED' : 'DISCONNECTED'),
+      status: daysUntilExpiry !== null && daysUntilExpiry < 0
+        ? 'EXPIRED'
+        : summary?.status ?? (envFallbackAvailable ? 'CONNECTED' : 'DISCONNECTED'),
       connectedAt: summary?.connectedAt ?? null,
       lastCheckedAt: summary?.lastCheckedAt ?? null,
       lastSuccessAt: summary?.lastSuccessAt ?? null,
       lastError: summary?.lastError ?? null,
       envFallbackAvailable,
       dbConfigured: Boolean(summary?.connectedAt),
+      expiresAt,
+      daysUntilExpiry,
     }
   })
   return c.json(ok(result, 'live'))
@@ -143,6 +157,8 @@ app.post('/:provider/connect', async (c) => {
   if (!meta) return c.json(fail('알 수 없는 provider', 'live'), 400)
 
   const body = await c.req.json().catch(() => ({}))
+  const expiry = parseExpiryDate(body.expiresAt)
+  if (!expiry.valid) return c.json(fail('만료일은 실제 존재하는 YYYY-MM-DD 날짜여야 합니다', 'live'), 400)
   const validation = validatePublicCredential(provider, body.credential)
   if (!validation.valid) return c.json(fail(validation.message, 'live'), 400)
 
@@ -151,7 +167,13 @@ app.post('/:provider/connect', async (c) => {
   if (!testResult.ok) return c.json(fail(testResult.message ?? '외부 API 연결에 실패했습니다', 'live'), 400)
 
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
-  await repo.upsertCredential({ provider, type: 'public_api', credential: validation.credential, updatedBy: admin.id })
+  await repo.upsertCredential({
+    provider,
+    type: 'public_api',
+    credential: validation.credential,
+    metadata: expiry.value ? { expiresAt: expiry.value } : {},
+    updatedBy: admin.id,
+  })
   await repo.recordCheckResult(provider, true)
 
   return c.json(ok({ provider, testResult }, 'live'))
