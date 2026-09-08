@@ -17,6 +17,7 @@ import todosRoutes from './routes/todos'
 import sitesRoutes from './routes/sites'
 import dashboardRoutes from './routes/dashboard'
 import briefingRoutes from './routes/briefing'
+import trafficRoutes from './routes/traffic'
 
 import adminUsersRoutes from './routes/admin/users'
 import adminIntegrationsRoutes from './routes/admin/integrations'
@@ -48,6 +49,7 @@ api.route('/todos', todosRoutes)
 api.route('/sites', sitesRoutes)
 api.route('/dashboard', dashboardRoutes)
 api.route('/briefing', briefingRoutes)
+api.route('/traffic', trafficRoutes)
 app.route('/api', api)
 
 // ---- 관리자 전용 ----

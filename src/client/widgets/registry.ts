@@ -13,6 +13,7 @@ import { OilPriceWidget } from './OilPriceWidget'
 import { MaterialPriceWidget } from './MaterialPriceWidget'
 import { MarketSummaryWidget } from './MarketSummaryWidget'
 import { AiBriefingWidget } from './AiBriefingWidget'
+import { NearbyTrafficWidget } from './NearbyTrafficWidget'
 
 /**
  * Widget Registry (기획 3~4번).
@@ -104,6 +105,20 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     minSize: { w: 1, h: 1 },
     maxSize: { w: 2, h: 2 },
     refreshInterval: 30 * 60 * 1000,
+    supportsLocation: true,
+    supportsManualRefresh: true,
+  },
+  {
+    id: 'nearbyTraffic',
+    title: '인근 교통정보',
+    description: '현장 인근 주요도로의 속도와 사고·공사·통제 정보를 확인합니다',
+    category: '현장환경',
+    icon: 'CarFront',
+    component: NearbyTrafficWidget,
+    defaultSize: { w: 1, h: 2 },
+    minSize: { w: 1, h: 1 },
+    maxSize: { w: 2, h: 3 },
+    refreshInterval: 5 * 60 * 1000,
     supportsLocation: true,
     supportsManualRefresh: true,
   },

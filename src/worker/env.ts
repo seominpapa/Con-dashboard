@@ -28,6 +28,7 @@ export interface Bindings {
   ECOS_API_KEY?: string
   OPINET_API_KEY?: string
   VWORLD_API_KEY?: string
+  ITS_API_KEY?: string
 
   // ---- LLM Provider (관리자가 /admin/integrations/ai 에서 DB로 연결 관리, ENV는 폴백/초기값) ----
   ANTHROPIC_API_KEY?: string

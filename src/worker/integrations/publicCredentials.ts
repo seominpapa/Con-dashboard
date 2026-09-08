@@ -8,6 +8,7 @@ const REQUIRED_FIELDS: Record<PublicApiProviderKey, readonly string[]> = {
   ecos: ['apiKey'],
   opinet: ['apiKey'],
   vworld: ['apiKey'],
+  its: ['apiKey'],
 }
 
 const FAILURE_LABELS: Record<PublicApiProviderKey, string> = {
@@ -18,6 +19,7 @@ const FAILURE_LABELS: Record<PublicApiProviderKey, string> = {
   ecos: '한국은행 ECOS',
   opinet: 'Opinet',
   vworld: 'VWorld 주소 좌표 변환',
+  its: '국가교통정보센터(ITS)',
 }
 
 type CredentialValidation =

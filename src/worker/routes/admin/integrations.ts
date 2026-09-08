@@ -34,6 +34,7 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   ecos: ['ECOS_API_KEY'],
   opinet: ['OPINET_API_KEY'],
   vworld: ['VWORLD_API_KEY'],
+  its: ['ITS_API_KEY'],
 }
 
 function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKey): Record<string, string> | null {
@@ -95,6 +96,13 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
       case 'vworld': {
         const p = new VWorldGeocodingProvider(credential.apiKey, domain)
         await p.geocode(TEST_SITE.address)
+        break
+      }
+      case 'its': {
+        const { ItsTrafficProvider } = await import('../../providers/traffic/ItsTrafficProvider')
+        const p = new ItsTrafficProvider(credential.apiKey)
+        const result = await p.getNearbyTraffic(TEST_SITE)
+        if (!result.roadsAvailable || !result.incidentsAvailable) return { ok: false, message: 'ITS 교통소통정보와 돌발상황정보 모두에 대한 활용신청 승인이 필요합니다' }
         break
       }
     }

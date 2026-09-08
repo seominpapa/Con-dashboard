@@ -20,6 +20,8 @@ export interface ApiEnvelope<T> {
   message?: string
   /** 응답이 캐시에서 제공되었는지 여부 */
   cached?: boolean
+  /** 만료된 마지막 정상 데이터를 표시하는지 여부 */
+  stale?: boolean
 }
 
 export function ok<T>(data: T, source: DataSource, message?: string): ApiEnvelope<T> {

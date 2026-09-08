@@ -40,7 +40,7 @@ export function useWidgetData<T>(path: string | null, refreshInterval = 0): UseW
       setData(res.data)
       hasDataRef.current = true
       setError(null)
-      setStale(false)
+      setStale(Boolean(res.stale))
       setIsMock(res.source === 'mock')
       setUpdatedAt(res.updatedAt)
     } else {

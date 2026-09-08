@@ -59,6 +59,7 @@ export const DEFAULT_WIDGET_ORDER = [
   'todo',
   'calendar',
   'airQuality',
+  'nearbyTraffic',
   'bidding',
   'constructionNews',
   'marketSummary',

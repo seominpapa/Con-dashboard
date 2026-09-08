@@ -13,15 +13,13 @@ interface CacheEntry<T> {
 }
 
 const store = new Map<string, CacheEntry<unknown>>()
+const inFlight = new Map<string, Promise<unknown>>()
 const MAX_ENTRIES = 500
 
 export function cacheGet<T>(key: string): T | undefined {
   const entry = store.get(key)
   if (!entry) return undefined
-  if (Date.now() > entry.expiresAt) {
-    store.delete(key)
-    return undefined
-  }
+  if (Date.now() > entry.expiresAt) return undefined
   return entry.value as T
 }
 
@@ -49,9 +47,18 @@ export async function withCache<T>(
   if (cached !== undefined) {
     return { value: cached, cached: true }
   }
-  const value = await fetcher()
-  cacheSet(key, value, ttlMs)
-  return { value, cached: false }
+  const pending = inFlight.get(key) as Promise<T> | undefined
+  if (pending) return { value: await pending, cached: false }
+
+  const request = fetcher()
+  inFlight.set(key, request)
+  try {
+    const value = await request
+    cacheSet(key, value, ttlMs)
+    return { value, cached: false }
+  } finally {
+    if (inFlight.get(key) === request) inFlight.delete(key)
+  }
 }
 
 /** TTL(ms) 상수 - 기획 21번 캐싱 전략 */
@@ -66,4 +73,5 @@ export const CACHE_TTL = {
   oil: 60 * 60 * 1000, // 1시간
   material: 12 * 60 * 60 * 1000, // 6~24시간 -> 12시간
   addressSearch: 10 * 60 * 1000,
+  traffic: 5 * 60 * 1000,
 } as const

@@ -370,7 +370,7 @@ test('address search cache reuses fresh values and exposes expired values only a
   const staleKey = `address-cache-stale-${Date.now()}`
   cacheSet(staleKey, ['old'], -1)
   assert.equal(cacheGet(staleKey), undefined)
-  assert.equal(cacheGetStale(staleKey), undefined)
+  assert.deepEqual(cacheGetStale(staleKey), { value: ['old'], isStale: true })
 
   const boundedPrefix = `address-cache-bounded-${Date.now()}`
   for (let index = 0; index < 600; index += 1) cacheSet(`${boundedPrefix}-${index}`, index, 60_000)
