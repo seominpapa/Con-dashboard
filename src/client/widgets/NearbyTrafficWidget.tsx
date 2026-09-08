@@ -40,10 +40,10 @@ export function NearbyTrafficWidget({ siteId }: WidgetProps) {
                   <span className="min-w-0 truncate text-slate-600">{road.roadName}{road.direction ? ` · ${road.direction}` : ''}</span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     <strong className="tabular-nums text-slate-800">{road.speedKph} km/h</strong>
-                    <Badge tone={STATUS_TONE[road.status]}>{road.status}</Badge>
+                    <Badge tone={STATUS_TONE[road.status]}>{road.statusSource === 'speed' ? `속도기준 ${road.status}` : road.status}</Badge>
                   </span>
                 </div>
-                <div role="img" aria-label={`${road.roadName} ${road.status}, 시속 ${road.speedKph}킬로미터`} className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                <div role="img" aria-label={`${road.roadName} ${road.statusSource === 'speed' ? '속도기준 ' : ''}${road.status}, 시속 ${road.speedKph}킬로미터`} className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                   <div className={`h-full rounded-full ${STATUS_VISUAL[road.status]}`} style={{ width: `${Math.min(100, Math.max(4, road.speedKph / 80 * 100))}%` }} />
                 </div>
               </div>

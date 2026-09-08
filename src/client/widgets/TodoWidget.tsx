@@ -21,7 +21,7 @@ const PRIORITY_LABEL: Record<TodoItem['priority'], string> = {
 }
 
 export function TodoWidget({}: WidgetProps) {
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<TodoItem[]>('/api/todos', 5 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<TodoItem[]>('/api/todos', 0)
 
   const items = (data ?? [])
     .filter((t) => t.status !== 'done')

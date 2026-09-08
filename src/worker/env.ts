@@ -22,6 +22,8 @@ export interface Bindings {
   KMA_SERVICE_KEY?: string
   AIRKOREA_SERVICE_KEY?: string
   G2B_SERVICE_KEY?: string
+  /** 조달청 가격정보현황서비스 전용 키. 미설정 시 G2B_SERVICE_KEY를 재사용한다. */
+  MATERIAL_PRICE_SERVICE_KEY?: string
   LAW_OC?: string
   /** @deprecated LAW_OC 사용 권장 */
   LAW_API_KEY?: string

@@ -33,14 +33,14 @@ export function buildSystemPrompt(): string {
 출력 JSON 스키마:
 {
   "summary": "한두 문장으로 오늘 핵심 요약",
-  "priorityItems": [{"level": "high|normal|low", "title": "...", "reason": "...", "sourceWidgets": ["weather", "siteSummary"]}],
+  "priorityItems": [{"level": "high|normal|low", "title": "...", "reason": "...", "sourceWidgets": ["weather"]}],
   "scheduleItems": [{"title": "...", "detail": "...", "sourceWidgets": ["calendar"]}],
   "riskItems": [{"title": "...", "detail": "...", "sourceWidgets": ["weatherAlert"]}],
   "marketItems": [{"title": "...", "detail": "...", "sourceWidgets": ["exchangeRate"]}],
   "informationItems": [{"title": "...", "detail": "...", "sourceWidgets": ["constructionNews"]}]
 }
 
-사용 가능한 sourceWidgets 키: weather, weatherAlert, airQuality, calendar, todo, siteSummary, bidding, constructionNews, law, exchangeRate, materialPrice`
+사용 가능한 sourceWidgets 키: weather, weatherAlert, airQuality, calendar, todo, bidding, constructionNews, law, exchangeRate, materialPrice`
 }
 
 export function buildUserPrompt(context: BriefingContext): string {

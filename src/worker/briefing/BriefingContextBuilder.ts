@@ -2,7 +2,6 @@ import type { Bindings } from '../env'
 import type { Site } from '../../shared/types/site'
 import { getWeatherProvider } from '../providers/weather'
 import { getAirQualityProvider } from '../providers/air-quality'
-import { getSiteSummaryProvider } from '../providers/site-summary'
 import { getBidProvider } from '../providers/bidding'
 import { getNewsProvider } from '../providers/news'
 import { getLawProvider } from '../providers/laws'
@@ -36,7 +35,6 @@ export interface BriefingContext {
   airQuality?: { data: unknown; freshness: 'fresh' | 'stale' }
   calendar?: { todayEvents: unknown[]; freshness: 'fresh' | 'stale' }
   todos?: { today: unknown[]; overdue: unknown[]; freshness: 'fresh' | 'stale' }
-  siteSummary?: { data: unknown; freshness: 'fresh' | 'stale' }
   bidding?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   news?: { data: unknown[]; freshness: 'fresh' | 'stale' }
   seriousAccidents?: { data: unknown[]; freshness: 'fresh' | 'stale' }
@@ -143,20 +141,6 @@ export async function buildBriefingContext(
           const today = all.filter((t) => t.status !== 'done' && t.dueDate === todayStr).slice(0, 10)
           const overdue = all.filter((t) => t.status !== 'done' && t.dueDate && t.dueDate < todayStr).slice(0, 10)
           context.todos = { today, overdue, freshness: 'fresh' }
-        } catch {
-          /* noop */
-        }
-      })()
-    )
-  }
-
-  if (site && has('siteSummary')) {
-    tasks.push(
-      (async () => {
-        try {
-          const provider = await getSiteSummaryProvider(env)
-          const summary = await provider.getTodaySummary(site)
-          context.siteSummary = { data: summary, freshness: 'fresh' }
         } catch {
           /* noop */
         }

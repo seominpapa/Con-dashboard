@@ -96,6 +96,32 @@ test('ITS provider keeps live traffic when the incident feed fails and never exp
   }
 })
 
+test('ITS provider derives an explicitly marked status when the feed only returns speed', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input))
+    if (url.pathname.includes('trafficInfo')) {
+      return new Response(JSON.stringify({ body: { data: [
+        { roadName: '정타길', speed: 10 },
+        { roadName: '갈원길', speed: 25 },
+        { roadName: '평택제천고속도로', speed: 48 },
+      ] } }))
+    }
+    return new Response(JSON.stringify({ body: { data: [] } }))
+  }
+
+  try {
+    const traffic = await new ItsTrafficProvider('test-key').getNearbyTraffic(site)
+    assert.deepEqual(traffic.roads.map(({ roadName, status, statusSource }) => ({ roadName, status, statusSource })), [
+      { roadName: '정타길', status: '정체', statusSource: 'speed' },
+      { roadName: '갈원길', status: '서행', statusSource: 'speed' },
+      { roadName: '평택제천고속도로', status: '원활', statusSource: 'speed' },
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('traffic upstream calls have a deadline and reject oversized responses', async () => {
   const originalFetch = globalThis.fetch
   const signals = []
@@ -170,6 +196,7 @@ test('nearby traffic widget renders accessible congestion graphics and incident 
   assert.match(widget, /role="img"/)
   assert.match(widget, /aria-label=\{`\$\{road\.roadName\}/)
   assert.match(widget, /STATUS_VISUAL\[road\.status\]/)
+  assert.match(widget, /속도기준/)
   assert.match(widget, /road\.speedKph\s*\/\s*80/)
   assert.match(widget, /정체 구간/)
   assert.match(widget, /incident\.type/)

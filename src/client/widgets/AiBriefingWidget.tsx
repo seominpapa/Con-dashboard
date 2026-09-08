@@ -31,7 +31,7 @@ function SourceTags({ sourceWidgets }: { sourceWidgets: string[] }) {
  *   (다른 위젯과 달리 error 상태에서도 WidgetShell 기본 에러 UI 대신 커스텀 안내 문구를 보여준다).
  */
 export function AiBriefingWidget({}: WidgetProps) {
-  const { data, loading, updatedAt, refresh } = useWidgetData<AiBriefingResponse>('/api/briefing/today', 0)
+  const { data, loading, error, updatedAt, refresh } = useWidgetData<AiBriefingResponse>('/api/briefing/today', 0)
 
   const status = data?.status
   const structured = data?.structured
@@ -41,7 +41,7 @@ export function AiBriefingWidget({}: WidgetProps) {
       title="AI 브리핑"
       icon={<Sparkles size={16} />}
       loading={loading}
-      error={null}
+      error={error}
       stale={false}
       updatedAt={data?.generatedAt ?? updatedAt}
       onRefresh={refresh}
@@ -55,8 +55,8 @@ export function AiBriefingWidget({}: WidgetProps) {
         </div>
       ) : status === 'unavailable' ? (
         <div className="flex h-full flex-col items-center justify-center gap-2 py-4 text-center text-slate-400">
-          <p className="text-xs">AI 브리핑 기능이 아직 준비 중입니다.</p>
-          <p className="text-[10px]">관리자가 AI 연동을 설정하면 자동으로 활성화됩니다.</p>
+          <p className="text-xs">{data.message ?? 'AI 브리핑 기능이 아직 준비 중입니다.'}</p>
+          {!data.message && <p className="text-[10px]">관리자가 AI 연동을 설정하면 자동으로 활성화됩니다.</p>}
         </div>
       ) : status === 'error' ? (
         <div className="flex h-full flex-col items-center justify-center gap-2 py-4 text-center text-slate-400">

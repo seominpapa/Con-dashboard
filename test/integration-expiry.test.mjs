@@ -178,6 +178,15 @@ test('public API summaries surface metadata-backed expiry state without expiring
       g2b: { status: 'CONNECTED', expiresAt: tomorrow, daysUntilExpiry: 1 },
     },
   )
+  assert.deepEqual({
+    status: rows.material_prices.status,
+    dbConfigured: rows.material_prices.dbConfigured,
+    credentialFallbackAvailable: rows.material_prices.credentialFallbackAvailable,
+  }, {
+    status: 'CONNECTED',
+    dbConfigured: false,
+    credentialFallbackAvailable: true,
+  })
 })
 
 test('admin renewal UI uses the native date control, shows expiry details, and submits expiresAt', async () => {
@@ -193,5 +202,41 @@ test('admin renewal UI uses the native date control, shows expiry details, and s
   assert.match(source, /갱신/)
   assert.match(source, /15000415/)
   assert.match(source, /15129415/)
+  assert.match(source, /활용신청/)
+  assert.match(source, /승인/)
+  assert.match(source, /API Key 입력/)
+  assert.match(source, /연결 테스트/)
+  assert.match(source, /나라장터 자격증명 재사용 중/)
   assert.match(source, /credential:\s*credInputs[\s\S]*expiresAt|expiresAt[\s\S]*credential:\s*credInputs/)
+})
+
+test('material price integration tests the PPS material endpoint instead of the bid endpoint', async () => {
+  const store = createDatabase()
+  const app = createAdminApp()
+  const originalFetch = globalThis.fetch
+  let requestedPath = ''
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input))
+    requestedPath = url.pathname
+    return new Response(JSON.stringify({
+      response: {
+        header: { resultCode: '00' },
+        body: { items: [{ itemNm: '이형철근 SD400 D10', unitPrce: '765000', unit: 'ton', stdrDt: '2026-08-01' }] },
+      },
+    }))
+  }
+
+  try {
+    const response = await app.request('https://dashboard.example.test/material_prices/connect', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ credential: { apiKey: ['material', 'key'].join('-') } }),
+    }, { DB: store.database, AUTH_SECRET: 's'.repeat(32) })
+
+    assert.equal(response.status, 200)
+    assert.match(requestedPath, /PriceInfoService\/getPriceInfoListFcltyCmmnMtrilTotal$/)
+    assert.equal(store.row('material_prices').provider, 'material_prices')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })

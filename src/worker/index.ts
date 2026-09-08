@@ -10,7 +10,6 @@ import newsRoutes from './routes/news'
 import lawsRoutes from './routes/laws'
 import exchangeRatesRoutes from './routes/exchange-rates'
 import materialPricesRoutes from './routes/material-prices'
-import siteSummaryRoutes from './routes/site-summary'
 import schedulesRoutes from './routes/schedules'
 import todosRoutes from './routes/todos'
 import sitesRoutes from './routes/sites'
@@ -41,7 +40,6 @@ api.route('/news', newsRoutes)
 api.route('/laws', lawsRoutes)
 api.route('/exchange-rates', exchangeRatesRoutes)
 api.route('/material-prices', materialPricesRoutes)
-api.route('/site-summary', siteSummaryRoutes)
 api.route('/schedules', schedulesRoutes)
 api.route('/todos', todosRoutes)
 api.route('/sites', sitesRoutes)

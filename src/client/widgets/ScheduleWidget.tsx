@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { Calendar } from 'lucide-react'
 import { WidgetShell } from './WidgetShell'
 import { useWidgetData } from '../hooks/useWidgetData'
+import { getLocalDayKey } from '../lib/localDate'
 import { Badge } from './badges'
 import type { WidgetProps } from '../../shared/types/widget'
 import type { ScheduleEvent } from '../../shared/types/schedule'
@@ -14,12 +16,20 @@ function formatDate(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+export { getLocalDayKey } from '../lib/localDate'
+
 export function ScheduleWidget({}: WidgetProps) {
-  const from = new Date().toISOString()
-  const to = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const dayKey = getLocalDayKey(new Date())
+  const { from, to } = useMemo(() => {
+    const now = new Date()
+    return {
+      from: now.toISOString(),
+      to: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  }, [dayKey])
   const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<ScheduleEvent[]>(
     `/api/schedules?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    5 * 60 * 1000
+    0
   )
 
   const items = (data ?? []).slice().sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()).slice(0, 6)

@@ -11,6 +11,22 @@ import { AiUsageLogRepository } from '../repositories/AiUsageLogRepository'
 import type { Site } from '../../shared/types/site'
 import type { StoredBriefing } from '../repositories/AiBriefingRepository'
 import { SettingsRepository } from '../repositories/SettingsRepository'
+import type { BriefingContext } from './BriefingContextBuilder'
+
+const LEGACY_EMPTY_BRIEFING_SUMMARY = '오늘 대시보드에 등록된 데이터가 없습니다. 현장 정보와 대시보드 위젯을 확인해 주세요.'
+const BRIEFING_DATA_KEYS: (keyof BriefingContext)[] = [
+  'weather',
+  'weatherAlerts',
+  'airQuality',
+  'calendar',
+  'todos',
+  'bidding',
+  'news',
+  'seriousAccidents',
+  'laws',
+  'exchangeRates',
+  'materialPrices',
+]
 
 /**
  * BriefingService (기획 41~51번 오케스트레이션)
@@ -63,14 +79,6 @@ export async function getOrCreateTodayBriefing(
     if (!dashboardConfig.configured) {
       return { status: 'unavailable', briefingDate, message: '대시보드 설정을 동기화한 뒤 다시 시도해 주세요' }
     }
-    const canGenerate = await new SettingsRepository(env.DB).consumeFixedWindow(
-      `ai_briefing_generate_rate:${params.userId}:${briefingDate}`,
-      5,
-      60 * 60,
-    )
-    if (!canGenerate) {
-      return { status: 'error', briefingDate, message: 'AI 브리핑 재시도 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요' }
-    }
     const sites = await siteRepo.listByUser(params.userId)
     const site = selectBriefingSite(sites, dashboardConfig.activeSiteId)
 
@@ -80,45 +88,73 @@ export async function getOrCreateTodayBriefing(
       activeWidgets: dashboardConfig.widgets,
       userId: params.userId,
     })
+    if (!hasBriefingData(context)) {
+      return { status: 'unavailable', briefingDate, message: '브리핑에 사용할 대시보드 데이터를 불러오지 못했습니다. 위젯을 새로고침한 뒤 다시 시도해 주세요' }
+    }
     const contextHash = await hashContext(context)
 
     const systemPrompt = buildSystemPrompt()
     const userPrompt = buildUserPrompt(context)
 
-    const result = await llm.generateBriefing(systemPrompt, userPrompt, { jsonMode: true, maxTokens: 2000 })
-    const structured = parseStructuredOutput(result.text)
-
-    const inserted = await briefingRepo.tryInsert({
-      userId: params.userId,
-      siteId: site?.id ?? null,
-      briefingDate,
-      provider: llm.key,
-      model: result.model,
-      structured,
-      contextHash,
-      status: 'success',
-    })
-
-    // 사용량 로그 기록 (기획 50번)
-    await new AiUsageLogRepository(env.DB).log({
-      userId: params.userId,
-      provider: llm.key,
-      model: result.model,
-      purpose: 'briefing',
-      inputTokens: result.usage.inputTokens,
-      outputTokens: result.usage.outputTokens,
-      success: true,
-    })
-
-    if (!inserted) {
-      // 동시 요청 경합에서 패배 -> 이미 저장된 것을 재조회하여 반환
-      const raced = await briefingRepo.findByUserAndDate(params.userId, briefingDate)
-      if (raced && raced.status === 'success') {
-        return { status: 'ready', briefingDate, provider: raced.provider, model: raced.model ?? undefined, structured: raced.structured, generatedAt: raced.generatedAt }
-      }
+    const settingsRepo = new SettingsRepository(env.DB)
+    const leaseKey = `ai_briefing_generation_lease:${params.userId}:${briefingDate}`
+    // ponytail: 5분 lease. LLM 요청이 5분을 넘기면 소유자 토큰이 있는 lease로 교체한다.
+    const hasLease = await settingsRepo.consumeFixedWindow(leaseKey, 1, 300)
+    if (!hasLease) {
+      return { status: 'generating', briefingDate, message: '다른 요청에서 오늘의 AI 브리핑을 생성하고 있습니다' }
     }
 
-    return { status: 'ready', briefingDate, provider: llm.key, model: result.model, structured, generatedAt: new Date().toISOString() }
+    try {
+      const canGenerate = await settingsRepo.consumeFixedWindow(
+        `ai_briefing_generate_rate:${params.userId}:${briefingDate}`,
+        5,
+        60 * 60,
+      )
+      if (!canGenerate) {
+        return { status: 'error', briefingDate, message: 'AI 브리핑 재시도 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요' }
+      }
+
+      const result = await llm.generateBriefing(systemPrompt, userPrompt, { jsonMode: true, maxTokens: 2000 })
+      const structured = parseStructuredOutput(result.text)
+
+      const inserted = await briefingRepo.tryInsert({
+        userId: params.userId,
+        siteId: site?.id ?? null,
+        briefingDate,
+        provider: llm.key,
+        model: result.model,
+        structured,
+        contextHash,
+        status: 'success',
+      })
+
+      // 사용량 로그 기록 (기획 50번)
+      await new AiUsageLogRepository(env.DB).log({
+        userId: params.userId,
+        provider: llm.key,
+        model: result.model,
+        purpose: 'briefing',
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        success: true,
+      })
+
+      if (!inserted) {
+        // lease 만료 후 시작된 다른 요청이 먼저 저장한 경우를 보정한다.
+        const raced = await briefingRepo.findByUserAndDate(params.userId, briefingDate)
+        if (raced && raced.status === 'success') {
+          return { status: 'ready', briefingDate, provider: raced.provider, model: raced.model ?? undefined, structured: raced.structured, generatedAt: raced.generatedAt }
+        }
+      }
+
+      return { status: 'ready', briefingDate, provider: llm.key, model: result.model, structured, generatedAt: new Date().toISOString() }
+    } finally {
+      try {
+        await settingsRepo.delete(leaseKey)
+      } catch (err) {
+        console.error('[briefing] lease cleanup failed:', err instanceof Error ? err.message : 'unknown error')
+      }
+    }
   } catch (err: any) {
     console.error('[briefing] generation failed:', err.message)
     try {
@@ -140,7 +176,7 @@ export async function getOrCreateTodayBriefing(
 }
 
 export async function loadSuccessfulCachedBriefing(
-  repository: Pick<AiBriefingRepository, 'findByUserAndDate' | 'deleteErrorByUserAndDate'>,
+  repository: Pick<AiBriefingRepository, 'findByUserAndDate' | 'deleteErrorByUserAndDate' | 'deleteLegacyEmptySuccessById'>,
   userId: string,
   briefingDate: string,
 ): Promise<StoredBriefing | null> {
@@ -149,7 +185,15 @@ export async function loadSuccessfulCachedBriefing(
     await repository.deleteErrorByUserAndDate(userId, briefingDate)
     return null
   }
+  if (existing?.status === 'success' && existing.structured?.summary === LEGACY_EMPTY_BRIEFING_SUMMARY) {
+    await repository.deleteLegacyEmptySuccessById(existing.id)
+    return null
+  }
   return existing
+}
+
+export function hasBriefingData(context: BriefingContext): boolean {
+  return BRIEFING_DATA_KEYS.some((key) => context[key] !== undefined)
 }
 
 export function selectBriefingSite(sites: Site[], activeSiteId?: string): Site | null {

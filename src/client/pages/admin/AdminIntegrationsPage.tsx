@@ -13,6 +13,7 @@ interface IntegrationRow {
   lastSuccessAt: string | null
   lastError: string | null
   envFallbackAvailable: boolean
+  credentialFallbackAvailable: boolean
   dbConfigured: boolean
   docsUrl?: string
   expiresAt: string | null
@@ -28,7 +29,7 @@ const STATUS_META: Record<IntegrationRow['status'], { label: string; icon: any; 
 }
 
 /**
- * 공개데이터 API 연결 센터 (기획 33~34번): 7개 Provider의 자격증명을 여기서만
+ * 공개데이터 API 연결 센터: 공공 API 자격증명을 여기서만
  * 등록/저장한다. 사용자는 절대 이 화면을 볼 수 없으며(관리자 전용 라우트),
  * 자격증명은 AES-GCM으로 암호화되어 DB에 저장되고 응답에는 값 자체가 포함되지 않는다.
  */
@@ -126,7 +127,7 @@ export function AdminIntegrationsPage() {
                 </p>
                 <p className="text-xs text-slate-400">
                   {meta.label}
-                  {r.dbConfigured ? ' · 관리자 등록됨' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ['its', 'naver_maps'].includes(r.provider) ? ' · 미설정' : ' · 미설정 (Mock 사용 중)'}
+                  {r.dbConfigured ? ' · 관리자 등록됨' : r.credentialFallbackAvailable ? ' · 나라장터 자격증명 재사용 중' : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ['its', 'naver_maps'].includes(r.provider) ? ' · 미설정' : ' · 미설정 (Mock 사용 중)'}
                   {r.lastError ? ` · ${r.lastError}` : ''}
                 </p>
                 <p className={cn('mt-0.5 text-[11px]', r.daysUntilExpiry !== null && r.daysUntilExpiry < 0 ? 'text-amber-600' : 'text-slate-400')}>
@@ -192,17 +193,19 @@ export function AdminIntegrationsPage() {
             <p className="mt-1 text-[11px] text-slate-400">발급 사이트에 표시된 만료일을 입력하면 갱신 시점을 안내합니다.</p>
           </div>
           <p className="text-[11px] text-slate-400">저장 즉시 실제 연결 테스트가 수행됩니다. 값은 암호화되어 저장되며 이후 다시 조회할 수 없습니다.</p>
-          {editing && ['kma', 'airkorea', 'g2b'].includes(editing.provider) && (
+          {editing && ['kma', 'airkorea', 'g2b', 'material_prices'].includes(editing.provider) && (
             <p className="text-[11px] text-slate-400">공공데이터포털의 인코딩 또는 디코딩 인증키를 모두 사용할 수 있습니다.</p>
           )}
           {editing?.provider === 'law' && (
             <p className="text-[11px] text-slate-400">API Key가 아니라 국가법령정보 공동활용 신청에서 발급된 OC 값을 입력하세요.</p>
           )}
           {editing?.provider === 'kma' && (
-            <p className="text-[11px] text-slate-400">예보와 별도로 <a href="https://www.data.go.kr/data/15000415/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">기상특보 조회서비스</a>도 활용신청·승인되어야 특보 위젯이 작동합니다.</p>
+            <p className="text-[11px] text-slate-400">
+              특보 위젯 설정: <a href="https://www.data.go.kr/data/15000415/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">기상특보 조회서비스</a>에서 활용신청 → 승인 확인 → 위 API Key 입력 → 연결 테스트 순서로 진행하세요. 특보 승인은 단기예보 승인과 별도이며, 특보 미승인이 단기예보 연결을 끊지는 않습니다.
+            </p>
           )}
-          {editing?.provider === 'g2b' && (
-            <p className="text-[11px] text-slate-400">입찰정보와 별도로 <a href="https://www.data.go.kr/data/15129415/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">나라장터 가격정보현황서비스</a>도 활용신청해야 실제 자재 기준가격이 표시됩니다.</p>
+          {editing?.provider === 'material_prices' && (
+            <p className="text-[11px] text-slate-400">입찰정보와 별도로 <a href="https://www.data.go.kr/data/15129415/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">나라장터 가격정보현황서비스</a> 활용신청·승인 후 발급된 키를 입력하세요. 전용 키가 없으면 기존 나라장터 키를 재사용할 수 있습니다.</p>
           )}
           {editing?.provider === 'its' && (
             <p className="text-[11px] text-slate-400">교통소통정보와 <a href="https://www.data.go.kr/data/15040465/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">돌발상황정보</a> 두 서비스 모두 활용신청한 API Key를 입력하세요.</p>

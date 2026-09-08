@@ -117,7 +117,7 @@ export function DashboardGrid() {
     <section id="dashboard-grid" aria-label="위젯 대시보드">
       {sites.length === 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-          아직 등록된 현장이 없습니다. 현장환경 위젯(건설날씨/대기질/오늘의 현장)을 이용하려면 상단 현장 선택에서 현장을 먼저 등록하세요.
+          아직 등록된 현장이 없습니다. 현장환경 위젯(건설날씨/대기질)을 이용하려면 상단 현장 선택에서 현장을 먼저 등록하세요.
         </div>
       )}
       <div className="mb-4 flex items-center justify-between">

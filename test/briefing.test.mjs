@@ -5,6 +5,7 @@ import { createServer } from 'vite'
 
 const vite = await createServer({ appType: 'custom', logLevel: 'error' })
 const {
+  hasBriefingData,
   loadSuccessfulCachedBriefing,
   parseStructuredOutput,
   selectBriefingSite,
@@ -35,6 +36,52 @@ test('failed daily briefings are deleted and retried while successful briefings 
     deleteErrorByUserAndDate: async () => { throw new Error('must not delete success') },
   }
   assert.equal(await loadSuccessfulCachedBriefing(successRepo, 'user-1', '2026-09-08'), success)
+})
+
+test('legacy empty daily briefing is discarded once while a useful success cache is preserved', async () => {
+  const legacyEmpty = {
+    id: 'brief-empty',
+    status: 'success',
+    structured: {
+      summary: '오늘 대시보드에 등록된 데이터가 없습니다. 현장 정보와 대시보드 위젯을 확인해 주세요.',
+      priorityItems: [],
+      scheduleItems: [],
+      riskItems: [],
+      marketItems: [],
+      informationItems: [],
+    },
+  }
+  let deletedId = null
+  const legacyRepo = {
+    findByUserAndDate: async () => legacyEmpty,
+    deleteErrorByUserAndDate: async () => {},
+    deleteLegacyEmptySuccessById: async (id) => { deletedId = id },
+  }
+  assert.equal(await loadSuccessfulCachedBriefing(legacyRepo, 'user-1', '2026-09-08'), null)
+  assert.equal(deletedId, 'brief-empty')
+
+  const useful = {
+    ...legacyEmpty,
+    id: 'brief-useful',
+    structured: { ...legacyEmpty.structured, summary: '오늘은 강풍에 유의하세요.' },
+  }
+  const usefulRepo = {
+    findByUserAndDate: async () => useful,
+    deleteErrorByUserAndDate: async () => {},
+    deleteLegacyEmptySuccessById: async () => { throw new Error('must not delete useful success') },
+  }
+  assert.equal(await loadSuccessfulCachedBriefing(usefulRepo, 'user-1', '2026-09-08'), useful)
+})
+
+test('briefing generation only proceeds when normalized widget context contains data', () => {
+  const metadataOnly = {
+    generatedAt: '2026-09-08T00:00:00.000Z',
+    user: { name: '관리자' },
+    site: { id: 'site-1', name: '현장', address: '서울' },
+  }
+  assert.equal(hasBriefingData(metadataOnly), false)
+  assert.equal(hasBriefingData({ ...metadataOnly, weather: { data: {}, risk: {}, freshness: 'fresh' } }), true)
+  assert.equal(hasBriefingData({ ...metadataOnly, calendar: { todayEvents: [], freshness: 'fresh' } }), true)
 })
 
 test('structured briefing output rejects invalid JSON shapes instead of caching them', () => {
@@ -89,6 +136,17 @@ test('briefing context reads validated law and material selections from active w
 
 test('briefing generation attempts are rate limited even when failures are not cached', () => {
   const source = readFileSync(new URL('../src/worker/briefing/BriefingService.ts', import.meta.url), 'utf8')
-  assert.match(source, /ai_briefing_generate_rate:/)
-  assert.match(source, /consumeFixedWindow/)
+  const lease = source.indexOf('consumeFixedWindow(leaseKey, 1, 300)')
+  const quota = source.indexOf('ai_briefing_generate_rate:')
+  const generate = source.indexOf('llm.generateBriefing')
+  assert.ok(lease >= 0, 'an atomic five-minute generation lease is acquired')
+  assert.ok(lease < quota && quota < generate, 'only the lease holder consumes quota and calls the LLM')
+  assert.match(source, /status: 'generating'/)
+  assert.match(source, /finally\s*\{[\s\S]*delete\(leaseKey\)/)
+})
+
+test('AI briefing widget exposes transport errors from the shared data hook', () => {
+  const source = readFileSync(new URL('../src/client/widgets/AiBriefingWidget.tsx', import.meta.url), 'utf8')
+  assert.match(source, /data, loading, error, updatedAt, refresh/)
+  assert.match(source, /error=\{error\}/)
 })

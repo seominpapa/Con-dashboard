@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
 import { PpsMaterialPriceProvider } from '../src/worker/providers/materials/PpsMaterialPriceProvider.ts'
+import { PUBLIC_API_PROVIDERS } from '../src/shared/types/integration.ts'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
@@ -64,4 +65,22 @@ test('material widgets persist user-selected materials and hide unavailable live
   assert.match(registry, /G2B_SERVICE_KEY/)
   assert.match(route, /MockMaterialPriceProvider/)
   assert.match(route, /조달청 가격정보현황서비스/)
+})
+
+test('material prices have a dedicated admin integration and prefer its credential with G2B fallback', () => {
+  const provider = PUBLIC_API_PROVIDERS.find((item) => item.key === 'material_prices')
+  const registry = read('src/worker/providers/materials/index.ts')
+  const adminRoute = read('src/worker/routes/admin/integrations.ts')
+
+  assert.deepEqual(provider, {
+    key: 'material_prices',
+    label: '건설시장·주요자재가격(조달청)',
+    envVar: 'MATERIAL_PRICE_SERVICE_KEY / G2B_SERVICE_KEY',
+    docsUrl: 'https://www.data.go.kr/data/15129415/openapi.do',
+  })
+  assert.match(registry, /getDecryptedCredential<\{ apiKey: string \}>\('material_prices'\)/)
+  assert.match(registry, /materialCredential\?\.apiKey \|\| g2bCredential\?\.apiKey \|\| env\.MATERIAL_PRICE_SERVICE_KEY \|\| env\.G2B_SERVICE_KEY/)
+  assert.match(adminRoute, /case 'material_prices'/)
+  assert.match(adminRoute, /PpsMaterialPriceProvider/)
+  assert.match(adminRoute, /getPrices\(\['rebar'\]\)/)
 })

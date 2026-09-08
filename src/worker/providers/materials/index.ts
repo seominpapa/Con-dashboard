@@ -8,8 +8,11 @@ import { getAuthSecretFromEnv } from '../../auth/session'
 /** 조달청 연동 자격증명이 없으면 명확히 표시된 Mock 데이터를 사용한다. */
 export async function getMaterialPriceProvider(env: Bindings): Promise<MaterialPriceProvider> {
   const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
-  const dbCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>('g2b').catch(() => null)
-  const apiKey = dbCred?.apiKey || env.G2B_SERVICE_KEY
+  const [materialCredential, g2bCredential] = await Promise.all([
+    integrationRepo.getDecryptedCredential<{ apiKey: string }>('material_prices').catch(() => null),
+    integrationRepo.getDecryptedCredential<{ apiKey: string }>('g2b').catch(() => null),
+  ])
+  const apiKey = materialCredential?.apiKey || g2bCredential?.apiKey || env.MATERIAL_PRICE_SERVICE_KEY || env.G2B_SERVICE_KEY
   if (apiKey) return new PpsMaterialPriceProvider(apiKey)
   return new MockMaterialPriceProvider()
 }

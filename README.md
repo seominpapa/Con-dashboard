@@ -39,21 +39,20 @@ API 연동을 관리하는 구조로 설계되었습니다.
 - 위젯 레지스트리(`src/client/widgets/registry.ts`) 기반 — 신규 위젯 추가 시 레지스트리에만
   등록하면 Picker/Grid/아이콘 렌더링에 자동 반영
 
-### 위젯 14종
+### 위젯 13종
 | 위젯 | 데이터 소스 | 비고 |
 |---|---|---|
 | AI 브리핑 | 대시보드 구성 기반 LLM 요약 | 1일 1회, DB UNIQUE(userId,date) |
 | 일정관리 | `/api/schedules` | 7일 창, CRUD |
 | 할일관리 | `/api/todos` | CRUD, 인라인 완료 처리 |
 | 건설날씨 | 기상청(KMA) / Mock | 건설현장 리스크 룰엔진 + 면책문구 |
-| 기상·재난특보 | 기상청(KMA) / Mock | |
+| 기상·재난특보 | 기상청(KMA) / Mock | 단기예보와 별도로 기상특보 조회서비스 활용승인 필요 |
 | 대기질 | 에어코리아(AirKorea) / Mock | |
-| 오늘의 현장 | 현장요약 Provider / Mock | |
 | 관심입찰 | 나라장터(G2B) / Mock | |
 | 건설뉴스 | 네이버 뉴스 / Mock | |
 | 법령·제도 | 법제처 / Mock | 개정 여부 뱃지 |
 | 환율 | 한국은행(ECOS) / Mock | |
-| 주요자재가격 | **Mock 전용** | 상업 API 미확보, 명시적 면책문구 |
+| 주요자재가격 | 조달청 가격정보현황 / Mock | 가격정보 서비스 별도 활용승인 필요 |
 | 건설시장 종합 | 환율+자재가격 클라이언트 조합 | |
 
 ### 다중 현장(Site) 관리
@@ -63,7 +62,7 @@ API 연동을 관리하는 구조로 설계되었습니다.
 
 ### 관리자 패널 (`/admin`, ADMIN 전용)
 - 사용자 관리: 승인/거절/정지/재승인, 역할 변경 (최후 1인 ADMIN 강제 유지)
-- API 연결 센터: 공공데이터 7종 Provider 연결/테스트/해제, Credential은 AES-GCM 암호화 후 DB
+- API 연결 센터: 공공데이터 8종 Provider 연결/테스트/해제, Credential은 AES-GCM 암호화 후 DB
   저장, 클라이언트로 절대 반환/로그 출력되지 않음
   - 국가법령정보는 일반 API Key 대신 공동활용 신청에서 발급된 `OC` 값을 입력 (`LAW_OC`, 기존 `LAW_API_KEY`도 폴백 지원)
 - LLM Provider 관리: Claude / Codex(OpenAI) 공식 API Key 연결, OpenAI 모델 선택, 기본 Provider 지정

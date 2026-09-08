@@ -6,6 +6,7 @@ export interface NearbyRoadTraffic {
   travelTimeSeconds?: number
   direction?: string
   status: TrafficStatus
+  statusSource?: 'speed'
 }
 
 export interface NearbyTrafficIncident {

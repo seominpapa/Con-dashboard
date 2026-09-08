@@ -2,7 +2,6 @@ import type { WidgetDefinition } from '../../shared/types/widget'
 import { WeatherWidget } from './WeatherWidget'
 import { WeatherAlertWidget } from './WeatherAlertWidget'
 import { AirQualityWidget } from './AirQualityWidget'
-import { SiteSummaryWidget } from './SiteSummaryWidget'
 import { BiddingWidget } from './BiddingWidget'
 import { ConstructionNewsWidget } from './ConstructionNewsWidget'
 import { LawWidget } from './LawWidget'
@@ -45,7 +44,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     defaultSize: { w: 1, h: 2 },
     minSize: { w: 1, h: 1 },
     maxSize: { w: 2, h: 3 },
-    refreshInterval: 5 * 60 * 1000,
+    refreshInterval: 0,
     supportsLocation: false,
     supportsManualRefresh: true,
     detailPath: '/schedule',
@@ -60,7 +59,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     defaultSize: { w: 1, h: 2 },
     minSize: { w: 1, h: 1 },
     maxSize: { w: 2, h: 3 },
-    refreshInterval: 5 * 60 * 1000,
+    refreshInterval: 0,
     supportsLocation: false,
     supportsManualRefresh: true,
     detailPath: '/todo',
@@ -118,20 +117,6 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     minSize: { w: 1, h: 1 },
     maxSize: { w: 2, h: 3 },
     refreshInterval: 5 * 60 * 1000,
-    supportsLocation: true,
-    supportsManualRefresh: true,
-  },
-  {
-    id: 'siteSummary',
-    title: '오늘의 현장',
-    description: '투입 인원, 작업 종류, 장비, 위험 작업 현황을 요약합니다',
-    category: '현장환경',
-    icon: 'HardHat',
-    component: SiteSummaryWidget,
-    defaultSize: { w: 1, h: 2 },
-    minSize: { w: 1, h: 1 },
-    maxSize: { w: 2, h: 2 },
-    refreshInterval: 10 * 60 * 1000,
     supportsLocation: true,
     supportsManualRefresh: true,
   },
@@ -195,7 +180,7 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
   {
     id: 'materialPrice',
     title: '주요자재가격',
-    description: '철근/시멘트/H형강 등 주요 자재가격을 확인합니다 (Mock 데이터)',
+    description: '조달청 기준가격을 우선 사용하고 미연동 시 참고용 Mock 데이터를 표시합니다',
     category: '경제원가',
     icon: 'Package',
     component: MaterialPriceWidget,

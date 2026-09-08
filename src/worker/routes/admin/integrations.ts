@@ -30,6 +30,7 @@ const ENV_VAR_MAP: Record<PublicApiProviderKey, string[]> = {
   kma: ['KMA_SERVICE_KEY'],
   airkorea: ['AIRKOREA_SERVICE_KEY'],
   g2b: ['G2B_SERVICE_KEY'],
+  material_prices: ['MATERIAL_PRICE_SERVICE_KEY', 'G2B_SERVICE_KEY'],
   law: ['LAW_OC'],
   ecos: ['ECOS_API_KEY'],
   naver_maps: ['NAVER_MAP_CLIENT_ID', 'NAVER_MAP_CLIENT_SECRET'],
@@ -45,6 +46,10 @@ function getEnvCredential(env: AppEnv['Bindings'], provider: PublicApiProviderKe
     return env.NAVER_MAP_CLIENT_ID && env.NAVER_MAP_CLIENT_SECRET
       ? { clientId: env.NAVER_MAP_CLIENT_ID, clientSecret: env.NAVER_MAP_CLIENT_SECRET }
       : null
+  }
+  if (provider === 'material_prices') {
+    const apiKey = env.MATERIAL_PRICE_SERVICE_KEY || env.G2B_SERVICE_KEY
+    return apiKey ? { apiKey } : null
   }
   const value = env[ENV_VAR_MAP[provider][0] as keyof AppEnv['Bindings']]
   return typeof value === 'string' && value ? { apiKey: value } : null
@@ -70,6 +75,12 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         const { G2bBidProvider } = await import('../../providers/bidding/G2bBidProvider')
         const p = new G2bBidProvider(credential.apiKey)
         await p.searchBids({}, 1)
+        break
+      }
+      case 'material_prices': {
+        const { PpsMaterialPriceProvider } = await import('../../providers/materials/PpsMaterialPriceProvider')
+        const p = new PpsMaterialPriceProvider(credential.apiKey)
+        await p.getPrices(['rebar'])
         break
       }
       case 'law': {
@@ -125,6 +136,7 @@ app.get('/', async (c) => {
   const result = PUBLIC_API_PROVIDERS.map((p) => {
     const summary = byProvider.get(p.key)
     const envFallbackAvailable = Boolean(getEnvCredential(c.env, p.key))
+    const credentialFallbackAvailable = p.key === 'material_prices' && !summary?.connectedAt && Boolean(byProvider.get('g2b')?.connectedAt)
     const expiresAt = summary?.expiresAt ?? null
     const daysUntilExpiry = expiresAt ? daysBetweenDateKeys(todayKeySeoul(), expiresAt) : null
     return {
@@ -134,12 +146,13 @@ app.get('/', async (c) => {
       docsUrl: p.docsUrl,
       status: daysUntilExpiry !== null && daysUntilExpiry < 0
         ? 'EXPIRED'
-        : summary?.status ?? (envFallbackAvailable ? 'CONNECTED' : 'DISCONNECTED'),
+        : credentialFallbackAvailable ? 'CONNECTED' : summary?.status ?? (envFallbackAvailable ? 'CONNECTED' : 'DISCONNECTED'),
       connectedAt: summary?.connectedAt ?? null,
       lastCheckedAt: summary?.lastCheckedAt ?? null,
       lastSuccessAt: summary?.lastSuccessAt ?? null,
       lastError: summary?.lastError ?? null,
       envFallbackAvailable,
+      credentialFallbackAvailable,
       dbConfigured: Boolean(summary?.connectedAt),
       expiresAt,
       daysUntilExpiry,

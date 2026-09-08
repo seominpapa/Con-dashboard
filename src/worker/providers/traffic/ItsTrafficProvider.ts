@@ -40,9 +40,11 @@ function number(value: unknown): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
-function status(value: unknown): TrafficStatus {
+function status(value: unknown, speedKph: number): Pick<NearbyRoadTraffic, 'status' | 'statusSource'> {
   const normalized = clean(value, 10)
-  return normalized === '원활' || normalized === '서행' || normalized === '정체' ? normalized : '정보없음'
+  if (normalized === '원활' || normalized === '서행' || normalized === '정체') return { status: normalized }
+  // ponytail: 도로 종류별 기준이 제공되면 단일 임계값을 교체한다.
+  return { status: speedKph <= 15 ? '정체' : speedKph <= 30 ? '서행' : '원활', statusSource: 'speed' }
 }
 
 function normalizeRoad(item: any): NearbyRoadTraffic | null {
@@ -56,7 +58,7 @@ function normalizeRoad(item: any): NearbyRoadTraffic | null {
     speedKph,
     ...(travelTimeSeconds === undefined ? {} : { travelTimeSeconds }),
     ...(direction ? { direction } : {}),
-    status: status(item?.status ?? item?.trafficStatus),
+    ...status(item?.status ?? item?.trafficStatus, speedKph),
   }
 }
 

@@ -52,7 +52,6 @@ export const dashboardRepository: DashboardRepository = new LocalStorageDashboar
 
 /** 신규 사용자 기본 위젯 배치 순서 (기획 24번) */
 export const DEFAULT_WIDGET_ORDER = [
-  'siteSummary',
   'weatherAlert',
   'weather',
   'aiBriefing',
