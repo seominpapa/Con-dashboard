@@ -198,6 +198,12 @@ export function AdminIntegrationsPage() {
           {editing?.provider === 'law' && (
             <p className="text-[11px] text-slate-400">API Key가 아니라 국가법령정보 공동활용 신청에서 발급된 OC 값을 입력하세요.</p>
           )}
+          {editing?.provider === 'kma' && (
+            <p className="text-[11px] text-slate-400">예보와 별도로 <a href="https://www.data.go.kr/data/15000415/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">기상특보 조회서비스</a>도 활용신청·승인되어야 특보 위젯이 작동합니다.</p>
+          )}
+          {editing?.provider === 'g2b' && (
+            <p className="text-[11px] text-slate-400">입찰정보와 별도로 <a href="https://www.data.go.kr/data/15129415/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">나라장터 가격정보현황서비스</a>도 활용신청해야 실제 자재 기준가격이 표시됩니다.</p>
+          )}
           {editing?.provider === 'its' && (
             <p className="text-[11px] text-slate-400">교통소통정보와 <a href="https://www.data.go.kr/data/15040465/openapi.do" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">돌발상황정보</a> 두 서비스 모두 활용신청한 API Key를 입력하세요.</p>
           )}

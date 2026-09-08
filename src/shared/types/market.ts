@@ -22,6 +22,8 @@ export interface MaterialPriceItem {
   currency: string
   changeRate: number
   direction: TrendDirection
+  /** 조달청 기준가격은 전일 대비 시세가 아니므로 변동률을 표시하지 않는다. */
+  hasTrend?: boolean
   source: string
   updatedAt: string
   isMock: boolean
@@ -46,6 +48,5 @@ export const MATERIAL_CATALOG: { key: string; label: string; unit: string }[] = 
   { key: 'asphalt', label: '아스팔트', unit: 'ton' },
   { key: 'aggregate', label: '골재', unit: 'm³' },
   { key: 'lumber', label: '목재', unit: 'm³' },
-  { key: 'crude-oil', label: '원유', unit: 'barrel' },
   { key: 'nickel', label: '니켈', unit: 'ton' },
 ]

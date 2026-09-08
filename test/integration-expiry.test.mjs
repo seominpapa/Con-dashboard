@@ -191,5 +191,7 @@ test('admin renewal UI uses the native date control, shows expiry details, and s
   assert.match(source, /만료일/)
   assert.match(source, /남은.*일/)
   assert.match(source, /갱신/)
+  assert.match(source, /15000415/)
+  assert.match(source, /15129415/)
   assert.match(source, /credential:\s*credInputs[\s\S]*expiresAt|expiresAt[\s\S]*credential:\s*credInputs/)
 })

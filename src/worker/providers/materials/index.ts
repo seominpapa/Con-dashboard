@@ -1,14 +1,16 @@
 import type { Bindings } from '../../env'
 import type { MaterialPriceProvider } from './MaterialPriceProvider'
 import { MockMaterialPriceProvider } from './MockMaterialPriceProvider'
+import { PpsMaterialPriceProvider } from './PpsMaterialPriceProvider'
+import { IntegrationRepository } from '../../repositories/IntegrationRepository'
+import { getAuthSecretFromEnv } from '../../auth/session'
 
-/**
- * 자재가격은 자재별로 데이터 출처가 상이하여(기획 17번), 현재는 공식/상업적
- * 이용이 허용된 통합 API가 확보되지 않아 Mock Provider만 제공한다.
- * 향후 자재별 공식 출처(예: 대한건설협회 물가정보 등)가 확보되면
- * 이 Registry에 실제 Provider를 등록하기만 하면 된다.
- */
-export function getMaterialPriceProvider(_env: Bindings): MaterialPriceProvider {
+/** 조달청 연동 자격증명이 없으면 명확히 표시된 Mock 데이터를 사용한다. */
+export async function getMaterialPriceProvider(env: Bindings): Promise<MaterialPriceProvider> {
+  const integrationRepo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
+  const dbCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>('g2b').catch(() => null)
+  const apiKey = dbCred?.apiKey || env.G2B_SERVICE_KEY
+  if (apiKey) return new PpsMaterialPriceProvider(apiKey)
   return new MockMaterialPriceProvider()
 }
 

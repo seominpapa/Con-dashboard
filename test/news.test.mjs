@@ -27,6 +27,34 @@ test('MOEL uses its current policy, notice, and law-information RSS feeds', () =
   assert.doesNotMatch(rssProvider, /moelRssList\.do/)
 })
 
+test('construction news keeps official MOLIT RSS results when GDELT is rate-limited', async () => {
+  const originalFetch = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input))
+    calls.push(url)
+    if (url.hostname === 'api.gdeltproject.org') return new Response('', { status: 429 })
+    if (url.hostname === 'www.molit.go.kr' && url.searchParams.get('rss_id') === 'NEWS') {
+      return new Response(`<?xml version="1.0"?><rss><channel><item>
+        <title><![CDATA[국토부 건설현장 안전점검]]></title>
+        <link>https://www.molit.go.kr/article/1</link>
+        <pubDate>Mon, 08 Sep 2026 10:00:00 +0900</pubDate>
+      </item></channel></rss>`)
+    }
+    return new Response('', { status: 503 })
+  }
+
+  try {
+    const news = await new RssNewsProvider().getNews(['건설안전'], 10)
+    assert.ok(calls.some((url) => url.hostname === 'www.molit.go.kr' && url.searchParams.get('rss_id') === 'NEWS'))
+    assert.equal(news.length, 1)
+    assert.equal(news[0].source, '국토교통부')
+    assert.equal(news[0].title, '국토부 건설현장 안전점검')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('free news provider makes one Korean GDELT request, normalizes it, and survives partial MOEL failure', async () => {
   const originalFetch = globalThis.fetch
   const calls = []

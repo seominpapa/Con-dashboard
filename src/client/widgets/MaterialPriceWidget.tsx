@@ -3,6 +3,7 @@ import { Package, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { WidgetShell } from './WidgetShell'
 import { useWidgetData } from '../hooks/useWidgetData'
 import type { WidgetProps } from '../../shared/types/widget'
+import { MATERIAL_CATALOG } from '../../shared/types/market'
 import type { MaterialPriceItem, TrendDirection } from '../../shared/types/market'
 
 const DIR_ICON: Record<TrendDirection, ReactElement> = {
@@ -11,13 +12,19 @@ const DIR_ICON: Record<TrendDirection, ReactElement> = {
   flat: <Minus size={12} className="text-slate-400" />,
 }
 
-/**
- * 주요자재가격 - 기획 17번: 공식 상업용 API 확보 전까지 Mock 전용.
- * 서버가 항상 source:'mock' + message로 안내하지만, Widget 내부에도
- * 명시적 디스클레이머를 노출하여 사용자가 실거래가로 오인하지 않도록 한다.
- */
-export function MaterialPriceWidget({}: WidgetProps) {
-  const { data, loading, error, stale, isMock, updatedAt, refresh, } = useWidgetData<MaterialPriceItem[]>('/api/material-prices', 6 * 60 * 60 * 1000)
+/** 조달청 공공 기준가격과 명확히 표시된 Mock fallback을 보여준다. */
+export function MaterialPriceWidget({ settings, onSettingsChange }: WidgetProps) {
+  const configured = Array.isArray(settings.materialKeys)
+    ? settings.materialKeys.filter((key): key is string => typeof key === 'string' && MATERIAL_CATALOG.some((item) => item.key === key))
+    : []
+  const materialKeys = configured.length ? configured.slice(0, 6) : MATERIAL_CATALOG.slice(0, 6).map((item) => item.key)
+  const path = `/api/material-prices?keys=${encodeURIComponent(materialKeys.join(','))}`
+  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<MaterialPriceItem[]>(path, 6 * 60 * 60 * 1000)
+
+  const toggleMaterial = (key: string) => {
+    const next = materialKeys.includes(key) ? materialKeys.filter((item) => item !== key) : [...materialKeys, key].slice(0, 6)
+    if (next.length) onSettingsChange({ ...settings, materialKeys: next })
+  }
 
   return (
     <WidgetShell title="주요자재가격" icon={<Package size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
@@ -31,17 +38,30 @@ export function MaterialPriceWidget({}: WidgetProps) {
                   <span className="tabular-nums font-semibold text-slate-800">
                     {m.price.toLocaleString('ko-KR')} <span className="text-[10px] text-slate-400">{m.unit}</span>
                   </span>
-                  {DIR_ICON[m.direction]}
-                  <span className={m.direction === 'up' ? 'text-red-500' : m.direction === 'down' ? 'text-blue-500' : 'text-slate-400'}>
-                    {m.changeRate > 0 ? '+' : ''}{m.changeRate.toFixed(1)}%
-                  </span>
+                  {m.hasTrend !== false && DIR_ICON[m.direction]}
+                  {m.hasTrend !== false && (
+                    <span className={m.direction === 'up' ? 'text-red-500' : m.direction === 'down' ? 'text-blue-500' : 'text-slate-400'}>
+                      {m.changeRate > 0 ? '+' : ''}{m.changeRate.toFixed(1)}%
+                    </span>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
-          <p className="rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-700">
-            ⓘ 공식 상업용 자재가격 API 확보 전까지 참고용 Mock 데이터입니다. 실제 구매 시 별도 견적을 확인하세요.
+          <p className={`rounded px-2 py-1 text-[10px] ${isMock ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
+            {isMock ? 'ⓘ 조달청 서비스 미승인 또는 조회 실패로 참고용 Mock 데이터입니다.' : 'ⓘ 조달청 공공 기준가격이며 실시간 시세·변동률이 아닙니다.'}
           </p>
+          <details className="text-[11px] text-slate-500">
+            <summary className="cursor-pointer font-medium">표시 자재 선택 (최대 6개)</summary>
+            <div className="mt-1 grid grid-cols-2 gap-1">
+              {MATERIAL_CATALOG.map((item) => (
+                <label key={item.key} className="flex items-center gap-1">
+                  <input type="checkbox" checked={materialKeys.includes(item.key)} onChange={() => toggleMaterial(item.key)} />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </details>
         </div>
       ) : (
         <p className="text-xs text-slate-400">데이터 없음</p>

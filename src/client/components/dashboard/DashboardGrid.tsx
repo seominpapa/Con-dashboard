@@ -14,6 +14,7 @@ import {
   type DashboardConfig,
   type DashboardWidgetInstance,
 } from '../../lib/dashboardRepository'
+import { mergeWidgetSettings } from '../../../shared/utils/dashboardConfig'
 
 /**
  * 기획 1, 2, 24번 핵심: PC 2~4열 / 태블릿 2열 / 모바일 1열 반응형 그리드,
@@ -30,7 +31,9 @@ export function DashboardGrid() {
 
   useEffect(() => {
     const loaded = dashboardRepository.load() ?? createDefaultConfig()
+    dashboardRepository.save(loaded)
     setConfig(loaded)
+    syncDashboardConfigToServer(loaded)
   }, [])
 
   const persist = useCallback((next: DashboardConfig) => {
@@ -38,6 +41,11 @@ export function DashboardGrid() {
     dashboardRepository.save(next)
     syncDashboardConfigToServer(next)
   }, [])
+
+  useEffect(() => {
+    if (sitesLoading || !config || config.activeSiteId === activeSiteId || (sites.length > 0 && !activeSiteId)) return
+    persist({ ...config, activeSiteId: activeSiteId ?? null })
+  }, [activeSiteId, config, persist, sites, sitesLoading])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -93,6 +101,11 @@ export function DashboardGrid() {
     persist(next)
   }
 
+  function handleSettingsChange(instanceId: string, settings: Record<string, unknown>) {
+    if (!config) return
+    persist(mergeWidgetSettings(config, instanceId, settings))
+  }
+
   if (!config || sitesLoading) {
     return <div className="flex h-64 items-center justify-center text-sm text-slate-400">불러오는 중...</div>
   }
@@ -132,6 +145,7 @@ export function DashboardGrid() {
                   maxSpan={def.maxSize.w}
                   onHide={handleHide}
                   onCycleSize={handleCycleSize}
+                  onSettingsChange={handleSettingsChange}
                 />
               )
             })}

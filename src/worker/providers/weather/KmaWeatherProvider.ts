@@ -7,7 +7,7 @@ import type {
   PrecipitationType,
   SkyCondition,
 } from '../../../shared/types/weather'
-import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredentials'
+import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredentials.ts'
 
 const BASE_URL = 'https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0'
 const WARN_URL = 'https://apis.data.go.kr/1360000/WthrWrnInfoService'
@@ -170,6 +170,9 @@ export class KmaWeatherProvider implements WeatherProvider {
     url.searchParams.set('dataType', 'JSON')
 
     const res = await fetch(url.toString())
+    if (res.status === 403) {
+      throw new Error('KMA 기상특보 API는 단기예보와 별도로 활용신청 및 승인이 필요합니다 (HTTP 403)')
+    }
     if (!res.ok) throw new Error(`KMA 특보 API error: ${res.status}`)
     const json: any = await res.json()
     const header = json?.response?.header
@@ -182,7 +185,7 @@ export class KmaWeatherProvider implements WeatherProvider {
     const regionKeyword = site.address.split(' ').slice(0, 1)[0] // 시/도 단위로 필터
 
     return items
-      .filter((item: any) => !regionKeyword || (item.stnId ?? item.areaName ?? '').includes(regionKeyword))
+      .filter((item: any) => !regionKeyword || !item.areaName || String(item.areaName).includes(regionKeyword))
       .map((item: any, idx: number) => ({
         id: `kma-alert-${idx}-${item.tmFc ?? ''}`,
         kind: (item.warnVar ?? item.title ?? '호우').replace(/(주의보|경보)/, '').trim(),

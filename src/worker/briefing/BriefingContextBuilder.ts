@@ -8,11 +8,13 @@ import { getNewsProvider } from '../providers/news'
 import { getLawProvider } from '../providers/laws'
 import { getExchangeRateProvider } from '../providers/exchange'
 import { getMaterialPriceProvider } from '../providers/materials'
+import { MockMaterialPriceProvider } from '../providers/materials/MockMaterialPriceProvider'
 import { ScheduleRepository } from '../repositories/ScheduleRepository'
 import { TodoRepository } from '../repositories/TodoRepository'
 import { evaluateConstructionWeatherRisk } from '../../shared/utils/constructionWeatherRisk'
 import { RECOMMENDED_LAWS } from '../../shared/types/law'
 import { MATERIAL_CATALOG } from '../../shared/types/market'
+import type { ActiveDashboardWidget } from '../repositories/DashboardConfigRepository'
 
 /**
  * BriefingContextBuilder (기획 40번)
@@ -53,10 +55,15 @@ function isFresh(updatedAt: string, maxAgeMs: number): 'fresh' | 'stale' {
  */
 export async function buildBriefingContext(
   env: Bindings,
-  params: { userName: string; site: Site | null; activeWidgetIds: string[]; userId: string }
+  params: {
+    userName: string
+    site: Site | null
+    activeWidgets: ActiveDashboardWidget[]
+    userId: string
+  }
 ): Promise<BriefingContext> {
-  const { site, activeWidgetIds, userId } = params
-  const has = (id: string) => activeWidgetIds.includes(id)
+  const { site, activeWidgets, userId } = params
+  const has = (id: string) => activeWidgets.some((widget) => widget.widgetId === id)
 
   const context: BriefingContext = {
     generatedAt: new Date().toISOString(),
@@ -193,7 +200,8 @@ export async function buildBriefingContext(
       (async () => {
         try {
           const provider = await getLawProvider(env)
-          const laws = await provider.getLaws([...RECOMMENDED_LAWS])
+          const names = selectedWidgetStrings(activeWidgets, 'law', 'lawNames', RECOMMENDED_LAWS, 20)
+          const laws = await provider.getLaws(names)
           const changed = laws.filter((l) => l.changed)
           context.laws = { data: changed.length ? changed : laws.slice(0, 3), freshness: 'fresh' }
         } catch {
@@ -222,10 +230,24 @@ export async function buildBriefingContext(
       (async () => {
         try {
           const provider = await getMaterialPriceProvider(env)
-          // 사용자가 선택한 자재만 (기획 50번) - 기본 카탈로그 상위 4개로 제한
-          const keys = MATERIAL_CATALOG.slice(0, 4).map((m) => m.key)
-          const prices = await provider.getPrices(keys)
-          context.materialPrices = { data: prices, freshness: 'stale' /* Mock 데이터임을 명시 */ }
+          const allowedKeys = new Set(MATERIAL_CATALOG.map((material) => material.key))
+          const keys = selectedWidgetStrings(
+            activeWidgets,
+            'materialPrice',
+            'materialKeys',
+            MATERIAL_CATALOG.slice(0, 4).map((material) => material.key),
+            MATERIAL_CATALOG.length,
+          ).filter((key) => allowedKeys.has(key))
+          let prices
+          let source = provider.source
+          try {
+            prices = await provider.getPrices(keys)
+          } catch {
+            const fallback = new MockMaterialPriceProvider()
+            prices = await fallback.getPrices(keys)
+            source = fallback.source
+          }
+          context.materialPrices = { data: prices, freshness: source === 'live' ? 'fresh' : 'stale' }
         } catch {
           /* noop */
         }
@@ -235,6 +257,21 @@ export async function buildBriefingContext(
 
   await Promise.all(tasks)
   return context
+}
+
+export function selectedWidgetStrings(
+  widgets: ActiveDashboardWidget[],
+  widgetId: string,
+  settingKey: string,
+  fallback: readonly string[],
+  limit: number,
+): string[] {
+  const selected = widgets.flatMap((widget) => {
+    const value = widget.widgetId === widgetId ? widget.settings?.[settingKey] : undefined
+    return Array.isArray(value) ? value : []
+  })
+  const valid = [...new Set(selected.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
+  return (valid.length > 0 ? valid : [...fallback]).slice(0, limit)
 }
 
 /** 날씨는 hourly 배열이 크므로 Briefing용으로는 요약본만 사용 (Token 절약) */

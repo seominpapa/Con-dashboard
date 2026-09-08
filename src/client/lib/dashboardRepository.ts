@@ -82,13 +82,13 @@ export function createDefaultConfig(): DashboardConfig {
  * 서버에서 판단할 수 있게 하기 위함이다 (기획 39번). 실패해도 로컬 저장은
  * 이미 완료된 상태이므로 UX에 영향 없이 조용히 무시한다.
  */
-export function syncDashboardConfigToServer(config: DashboardConfig): void {
-  api
-    .put('/api/dashboard/config', {
+export async function syncDashboardConfigToServer(config: DashboardConfig): Promise<void> {
+  try {
+    await api.put('/api/dashboard/config', {
       widgets: config.desktopOrder.map((w) => ({ widgetId: w.widgetId, instanceId: w.instanceId, hidden: w.hidden, settings: w.settings })),
       activeSiteId: config.activeSiteId ?? undefined,
     })
-    .catch(() => {
-      /* 서버 동기화 실패는 무시 (localStorage가 이미 source of truth) */
-    })
+  } catch {
+    /* 서버 동기화 실패는 무시 (localStorage가 이미 source of truth) */
+  }
 }

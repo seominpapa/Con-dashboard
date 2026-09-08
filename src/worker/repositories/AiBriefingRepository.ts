@@ -55,6 +55,13 @@ export class AiBriefingRepository {
     return row ? rowToBriefing(row) : null
   }
 
+  async deleteErrorByUserAndDate(userId: string, briefingDate: string): Promise<void> {
+    await this.db
+      .prepare("DELETE FROM ai_briefings WHERE user_id = ? AND briefing_date = ? AND status = 'error'")
+      .bind(userId, briefingDate)
+      .run()
+  }
+
   /**
    * 동시 요청 시 중복 생성을 막기 위해 INSERT OR IGNORE 사용.
    * D1(SQLite)의 UNIQUE(user_id, briefing_date) 제약이 실제 방어선이다.

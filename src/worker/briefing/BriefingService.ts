@@ -8,6 +8,9 @@ import { buildSystemPrompt, buildUserPrompt } from './prompt'
 import { getDefaultLLMProvider } from '../llm'
 import { todayKeySeoul } from '../../shared/utils/timezone'
 import { AiUsageLogRepository } from '../repositories/AiUsageLogRepository'
+import type { Site } from '../../shared/types/site'
+import type { StoredBriefing } from '../repositories/AiBriefingRepository'
+import { SettingsRepository } from '../repositories/SettingsRepository'
 
 /**
  * BriefingService (기획 41~51번 오케스트레이션)
@@ -28,11 +31,8 @@ export async function getOrCreateTodayBriefing(
   const briefingDate = todayKeySeoul()
   const briefingRepo = new AiBriefingRepository(env.DB)
 
-  const existing = await briefingRepo.findByUserAndDate(params.userId, briefingDate)
+  const existing = await loadSuccessfulCachedBriefing(briefingRepo, params.userId, briefingDate)
   if (existing) {
-    if (existing.status === 'error') {
-      return { status: 'error', briefingDate, message: existing.errorMessage ?? 'AI 브리핑 생성에 실패했습니다' }
-    }
     return {
       status: 'ready',
       briefingDate,
@@ -59,14 +59,25 @@ export async function getOrCreateTodayBriefing(
     const dashboardRepo = new DashboardConfigRepository(env.DB)
     const siteRepo = new SiteRepository(env.DB)
 
-    const activeWidgetIds = await dashboardRepo.getActiveWidgetIds(params.userId)
+    const dashboardConfig = await dashboardRepo.getBriefingConfig(params.userId)
+    if (!dashboardConfig.configured) {
+      return { status: 'unavailable', briefingDate, message: '대시보드 설정을 동기화한 뒤 다시 시도해 주세요' }
+    }
+    const canGenerate = await new SettingsRepository(env.DB).consumeFixedWindow(
+      `ai_briefing_generate_rate:${params.userId}:${briefingDate}`,
+      5,
+      60 * 60,
+    )
+    if (!canGenerate) {
+      return { status: 'error', briefingDate, message: 'AI 브리핑 재시도 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요' }
+    }
     const sites = await siteRepo.listByUser(params.userId)
-    const site = sites[0] ?? null // 사용자의 기본/첫 현장 (기획상 "현재 선택된 현장" 개념, MVP는 첫번째)
+    const site = selectBriefingSite(sites, dashboardConfig.activeSiteId)
 
     const context = await buildBriefingContext(env, {
       userName: params.userName,
       site,
-      activeWidgetIds,
+      activeWidgets: dashboardConfig.widgets,
       userId: params.userId,
     })
     const contextHash = await hashContext(context)
@@ -110,17 +121,6 @@ export async function getOrCreateTodayBriefing(
     return { status: 'ready', briefingDate, provider: llm.key, model: result.model, structured, generatedAt: new Date().toISOString() }
   } catch (err: any) {
     console.error('[briefing] generation failed:', err.message)
-    await briefingRepo.tryInsert({
-      userId: params.userId,
-      siteId: null,
-      briefingDate,
-      provider: llm.key,
-      model: null,
-      structured: emptyStructured(),
-      contextHash: 'error',
-      status: 'error',
-      errorMessage: err.message,
-    })
     try {
       await new AiUsageLogRepository(env.DB).log({
         userId: params.userId,
@@ -139,24 +139,72 @@ export async function getOrCreateTodayBriefing(
   }
 }
 
-function parseStructuredOutput(text: string): BriefingStructuredContent {
+export async function loadSuccessfulCachedBriefing(
+  repository: Pick<AiBriefingRepository, 'findByUserAndDate' | 'deleteErrorByUserAndDate'>,
+  userId: string,
+  briefingDate: string,
+): Promise<StoredBriefing | null> {
+  const existing = await repository.findByUserAndDate(userId, briefingDate)
+  if (existing?.status === 'error') {
+    await repository.deleteErrorByUserAndDate(userId, briefingDate)
+    return null
+  }
+  return existing
+}
+
+export function selectBriefingSite(sites: Site[], activeSiteId?: string): Site | null {
+  return sites.find((site) => site.id === activeSiteId) ?? sites[0] ?? null
+}
+
+export function parseStructuredOutput(text: string): BriefingStructuredContent {
   try {
-    // JSON 코드블록 감싸짐 대비
     const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/```$/, '')
     const parsed = JSON.parse(cleaned)
+    if (!isRecord(parsed) || typeof parsed.summary !== 'string') throw new Error('invalid summary')
     return {
-      summary: parsed.summary ?? '',
-      priorityItems: Array.isArray(parsed.priorityItems) ? parsed.priorityItems : [],
-      scheduleItems: Array.isArray(parsed.scheduleItems) ? parsed.scheduleItems : [],
-      riskItems: Array.isArray(parsed.riskItems) ? parsed.riskItems : [],
-      marketItems: Array.isArray(parsed.marketItems) ? parsed.marketItems : [],
-      informationItems: Array.isArray(parsed.informationItems) ? parsed.informationItems : [],
+      summary: parsed.summary,
+      priorityItems: parsePriorityItems(parsed.priorityItems),
+      scheduleItems: parseListItems(parsed.scheduleItems),
+      riskItems: parseListItems(parsed.riskItems),
+      marketItems: parseListItems(parsed.marketItems),
+      informationItems: parseListItems(parsed.informationItems),
     }
   } catch {
-    return { summary: text.slice(0, 500), priorityItems: [], scheduleItems: [], riskItems: [], marketItems: [], informationItems: [] }
+    throw new Error('AI 브리핑 응답 형식이 올바르지 않습니다')
   }
 }
 
-function emptyStructured(): BriefingStructuredContent {
-  return { summary: '', priorityItems: [], scheduleItems: [], riskItems: [], marketItems: [], informationItems: [] }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function parseSourceWidgets(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) throw new Error('invalid sources')
+  return value
+}
+
+function parsePriorityItems(value: unknown): BriefingStructuredContent['priorityItems'] {
+  if (!Array.isArray(value)) throw new Error('invalid priority items')
+  return value.map((item) => {
+    if (
+      !isRecord(item)
+      || !['high', 'normal', 'low'].includes(String(item.level))
+      || typeof item.title !== 'string'
+      || typeof item.reason !== 'string'
+    ) throw new Error('invalid priority item')
+    return {
+      level: item.level as 'high' | 'normal' | 'low',
+      title: item.title,
+      reason: item.reason,
+      sourceWidgets: parseSourceWidgets(item.sourceWidgets),
+    }
+  })
+}
+
+function parseListItems(value: unknown): BriefingStructuredContent['scheduleItems'] {
+  if (!Array.isArray(value)) throw new Error('invalid list items')
+  return value.map((item) => {
+    if (!isRecord(item) || typeof item.title !== 'string' || typeof item.detail !== 'string') throw new Error('invalid list item')
+    return { title: item.title, detail: item.detail, sourceWidgets: parseSourceWidgets(item.sourceWidgets) }
+  })
 }

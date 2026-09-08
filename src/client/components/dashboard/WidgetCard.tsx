@@ -12,6 +12,7 @@ interface WidgetCardProps {
   maxSpan: number
   onHide: (instanceId: string) => void
   onCycleSize: (instanceId: string) => void
+  onSettingsChange: (instanceId: string, settings: Record<string, unknown>) => void
 }
 
 const SPAN_CLASS: Record<number, string> = {
@@ -26,7 +27,7 @@ const SPAN_CLASS: Record<number, string> = {
  * 카드 모서리에 떠있는 배지형 버튼으로 크기 조절/숨기기를 제공한다.
  * Widget 자체 컴포넌트는 Widget Registry에서 조회하며 하드코딩하지 않는다.
  */
-export function WidgetCard({ instance, siteId, span, maxSpan, onHide, onCycleSize }: WidgetCardProps) {
+export function WidgetCard({ instance, siteId, span, maxSpan, onHide, onCycleSize, onSettingsChange }: WidgetCardProps) {
   const def = getWidgetDefinition(instance.widgetId)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: instance.instanceId })
 
@@ -76,7 +77,12 @@ export function WidgetCard({ instance, siteId, span, maxSpan, onHide, onCycleSiz
         </button>
       </div>
       <div className="h-full [&_button]:cursor-pointer">
-        <Component instanceId={instance.instanceId} siteId={siteId} settings={instance.settings ?? {}} onSettingsChange={() => {}} />
+        <Component
+          instanceId={instance.instanceId}
+          siteId={siteId}
+          settings={instance.settings ?? {}}
+          onSettingsChange={(settings) => onSettingsChange(instance.instanceId, settings)}
+        />
       </div>
     </div>
   )

@@ -9,6 +9,14 @@ export interface StoredDashboardConfig {
   [key: string]: unknown
 }
 
+export type ActiveDashboardWidget = StoredDashboardConfig['widgets'][number]
+
+export interface BriefingDashboardConfig {
+  widgets: ActiveDashboardWidget[]
+  activeSiteId?: string
+  configured: boolean
+}
+
 export class DashboardConfigRepository {
   constructor(private db: D1Database) {}
 
@@ -30,8 +38,16 @@ export class DashboardConfigRepository {
 
   /** 활성 Widget ID 목록만 반환 (hidden 제외) */
   async getActiveWidgetIds(userId: string): Promise<string[]> {
+    return (await this.getBriefingConfig(userId)).widgets.map((w) => w.widgetId)
+  }
+
+  /** AI 브리핑에 필요한 활성 위젯 설정과 현재 현장을 함께 반환한다. */
+  async getBriefingConfig(userId: string): Promise<BriefingDashboardConfig> {
     const config = await this.get(userId)
-    if (!config) return []
-    return config.widgets.filter((w) => !w.hidden).map((w) => w.widgetId)
+    return {
+      configured: Boolean(config),
+      widgets: config?.widgets.filter((widget) => !widget.hidden) ?? [],
+      ...(config?.activeSiteId ? { activeSiteId: config.activeSiteId } : {}),
+    }
   }
 }

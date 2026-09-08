@@ -303,7 +303,8 @@ test('public API providers use their current authentication contracts', () => {
 
   assert.match(kma, /normalizeDataGoKrServiceKey/)
   assert.match(airKorea, /normalizeDataGoKrServiceKey/)
-  assert.match(airKorea, /getCtprvnRltmMesureDnsty/)
+  assert.match(airKorea, /getMsrstnList/)
+  assert.match(airKorea, /getMsrstnAcctoRltmMesureDnsty/)
   assert.doesNotMatch(airKorea, /tmX.*longitude|tmY.*latitude/s)
   assert.doesNotMatch(airKorea, /find\(.*stationName.*\)\s*\?\?\s*items\[0\]/s)
   assert.match(g2b, /normalizeDataGoKrServiceKey/)

@@ -9,6 +9,11 @@ export interface LawItem {
   url?: string
 }
 
+export const LAW_SEARCH_MIN_LENGTH = 2
+export const LAW_SEARCH_MAX_LENGTH = 50
+export const LAW_SEARCH_MAX_RESULTS = 20
+export const LAW_SELECTION_MAX = 20
+
 export const RECOMMENDED_LAWS = [
   '건설산업기본법',
   '건설기술진흥법',

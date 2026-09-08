@@ -4,6 +4,7 @@ import { LineChart, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { WidgetShell } from './WidgetShell'
 import { api } from '../lib/api'
 import type { WidgetProps } from '../../shared/types/widget'
+import { MATERIAL_CATALOG } from '../../shared/types/market'
 import type { ExchangeRateItem, MaterialPriceItem, TrendDirection } from '../../shared/types/market'
 
 interface SummaryIndicator {
@@ -12,6 +13,7 @@ interface SummaryIndicator {
   displayValue: string
   changeRate: number
   direction: TrendDirection
+  hasTrend: boolean
 }
 
 const DIR_ICON: Record<TrendDirection, ReactElement> = {
@@ -23,9 +25,9 @@ const DIR_ICON: Record<TrendDirection, ReactElement> = {
 /**
  * 건설시장 종합 - 환율/자재가격 API 응답을 조합해 핵심 지표만 뽑아 보여준다.
  * 별도 서버 라우트를 만들지 않고 기존 위젯 API를 재사용한다.
- * (자재가격은 항상 Mock이므로 최종 결과도 부분적으로 mock 소스를 포함할 수 있다 -> mockBadge로 안내)
+ * 자재가격 연동 실패 시 Mock 소스를 포함할 수 있어 mockBadge로 안내한다.
  */
-export function MarketSummaryWidget({}: WidgetProps) {
+export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps) {
   const [indicators, setIndicators] = useState<SummaryIndicator[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,12 +35,17 @@ export function MarketSummaryWidget({}: WidgetProps) {
   const [isMock, setIsMock] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
   const hasDataRef = useRef(false)
+  const configured = Array.isArray(settings.materialKeys)
+    ? settings.materialKeys.filter((key): key is string => typeof key === 'string' && MATERIAL_CATALOG.some((item) => item.key === key))
+    : []
+  const materialKeys = configured.length ? configured.slice(0, 3) : ['rebar', 'cement']
+  const materialQuery = materialKeys.join(',')
 
   const load = useCallback(async () => {
     setLoading(true)
     const [ex, mat] = await Promise.all([
       api.get<ExchangeRateItem[]>('/api/exchange-rates?codes=USD'),
-      api.get<MaterialPriceItem[]>('/api/material-prices?keys=rebar,cement'),
+      api.get<MaterialPriceItem[]>(`/api/material-prices?keys=${encodeURIComponent(materialQuery)}`),
     ])
     setLoading(false)
 
@@ -51,11 +58,10 @@ export function MarketSummaryWidget({}: WidgetProps) {
 
     const next: SummaryIndicator[] = []
     const usd = ex.data?.[0]
-    if (usd) next.push({ key: 'usd', label: '원/달러', displayValue: `${usd.rate.toLocaleString('ko-KR')}원`, changeRate: usd.changeRate, direction: usd.direction })
-    const rebar = mat.data?.find((m) => m.materialKey === 'rebar')
-    if (rebar) next.push({ key: 'rebar', label: '철근', displayValue: `${rebar.price.toLocaleString('ko-KR')}/${rebar.unit}`, changeRate: rebar.changeRate, direction: rebar.direction })
-    const cement = mat.data?.find((m) => m.materialKey === 'cement')
-    if (cement) next.push({ key: 'cement', label: '시멘트', displayValue: `${cement.price.toLocaleString('ko-KR')}/${cement.unit}`, changeRate: cement.changeRate, direction: cement.direction })
+    if (usd) next.push({ key: 'usd', label: '원/달러', displayValue: `${usd.rate.toLocaleString('ko-KR')}원`, changeRate: usd.changeRate, direction: usd.direction, hasTrend: true })
+    for (const material of mat.data ?? []) {
+      next.push({ key: material.materialKey, label: material.label, displayValue: `${material.price.toLocaleString('ko-KR')}/${material.unit}`, changeRate: material.changeRate, direction: material.direction, hasTrend: material.hasTrend !== false })
+    }
 
     setIndicators(next)
     hasDataRef.current = true
@@ -63,7 +69,12 @@ export function MarketSummaryWidget({}: WidgetProps) {
     setStale(false)
     setIsMock([ex.source, mat.source].includes('mock'))
     setUpdatedAt(new Date().toISOString())
-  }, [])
+  }, [materialQuery])
+
+  const toggleMaterial = (key: string) => {
+    const next = materialKeys.includes(key) ? materialKeys.filter((item) => item !== key) : [...materialKeys, key].slice(0, 3)
+    if (next.length) onSettingsChange({ ...settings, materialKeys: next })
+  }
 
   useEffect(() => {
     load()
@@ -89,13 +100,26 @@ export function MarketSummaryWidget({}: WidgetProps) {
               <p className="text-[11px] text-slate-500">{i.label}</p>
               <div className="mt-0.5 flex items-center gap-1">
                 <span className="text-xs font-semibold text-slate-800">{i.displayValue}</span>
-                {DIR_ICON[i.direction]}
+                {i.hasTrend && DIR_ICON[i.direction]}
               </div>
-              <span className={`text-[10px] ${i.direction === 'up' ? 'text-red-500' : i.direction === 'down' ? 'text-blue-500' : 'text-slate-400'}`}>
-                {i.changeRate > 0 ? '+' : ''}{i.changeRate.toFixed(1)}%
-              </span>
+              {i.hasTrend && (
+                <span className={`text-[10px] ${i.direction === 'up' ? 'text-red-500' : i.direction === 'down' ? 'text-blue-500' : 'text-slate-400'}`}>
+                  {i.changeRate > 0 ? '+' : ''}{i.changeRate.toFixed(1)}%
+                </span>
+              )}
             </div>
           ))}
+          <details className="col-span-2 text-[11px] text-slate-500">
+            <summary className="cursor-pointer font-medium">종합지표 자재 선택 (최대 3개)</summary>
+            <div className="mt-1 grid grid-cols-3 gap-1">
+              {MATERIAL_CATALOG.map((item) => (
+                <label key={item.key} className="flex items-center gap-1">
+                  <input type="checkbox" checked={materialKeys.includes(item.key)} onChange={() => toggleMaterial(item.key)} />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+          </details>
         </div>
       ) : (
         <p className="text-xs text-slate-400">데이터 없음</p>

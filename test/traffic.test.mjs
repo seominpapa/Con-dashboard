@@ -163,3 +163,15 @@ test('nearby traffic is wired through the protected API, admin credentials, and 
   assert.match(integrationTypes, /15040463/)
   assert.match(adminUi, /15040465/)
 })
+
+test('nearby traffic widget renders accessible congestion graphics and incident details', () => {
+  const widget = read('src/client/widgets/NearbyTrafficWidget.tsx')
+
+  assert.match(widget, /role="img"/)
+  assert.match(widget, /aria-label=\{`\$\{road\.roadName\}/)
+  assert.match(widget, /STATUS_VISUAL\[road\.status\]/)
+  assert.match(widget, /road\.speedKph\s*\/\s*80/)
+  assert.match(widget, /정체 구간/)
+  assert.match(widget, /incident\.type/)
+  assert.match(widget, /incident\.description/)
+})

@@ -4,28 +4,39 @@ import { getMaterialPriceProvider } from '../providers/materials'
 import { withCache, CACHE_TTL, cacheGetStale } from '../cache/memoryCache'
 import { ok, fail } from '../../shared/types/common'
 import { MATERIAL_CATALOG } from '../../shared/types/market'
+import { MockMaterialPriceProvider } from '../providers/materials/MockMaterialPriceProvider'
 
 const app = new Hono<AppEnv>()
 
-// GET /api/material-prices?keys=rebar,cement (Mock 전용, 기획 17번)
+// GET /api/material-prices?keys=rebar,cement
 app.get('/', async (c) => {
   const keysParam = c.req.query('keys')
-  const keys = keysParam ? keysParam.split(',') : MATERIAL_CATALOG.slice(0, 6).map((m) => m.key)
+  const allowed = new Set(MATERIAL_CATALOG.map((m) => m.key))
+  const requestedKeys = (keysParam ? keysParam.split(',') : MATERIAL_CATALOG.slice(0, 6).map((m) => m.key))
+    .filter((key) => allowed.has(key))
+    .slice(0, 6)
+  const keys = requestedKeys.length ? requestedKeys : MATERIAL_CATALOG.slice(0, 6).map((m) => m.key)
 
-  const cacheKey = `material:${keys.join(',')}`
+  const provider = await getMaterialPriceProvider(c.env)
+  const cacheKey = `material:${provider.source}:${keys.join(',')}`
   try {
-    const provider = await getMaterialPriceProvider(c.env)
     const { value, cached } = await withCache(cacheKey, CACHE_TTL.material, () => provider.getPrices(keys))
-    const envelope = ok(value, provider.source)
+    const message = provider.source === 'mock'
+      ? '조달청 가격정보현황서비스 미승인 또는 응답 실패로 참고용 Mock 데이터를 표시합니다.'
+      : '조달청 나라장터 가격정보현황서비스의 공공 기준가격입니다.'
+    const envelope = ok(value, provider.source, message)
     envelope.cached = cached
-    envelope.message = envelope.message ?? '자재가격은 공식 상업용 API 확보 전까지 Mock 데이터로 제공됩니다.'
     return c.json(envelope)
-  } catch (err: any) {
-    const stale = cacheGetStale<any>(cacheKey)
+  } catch {
+    const stale = cacheGetStale<any[]>(cacheKey)
     if (stale) {
-      return c.json({ status: 'success', data: stale.value, updatedAt: new Date().toISOString(), source: 'mock', cached: true, message: `이전 데이터를 표시합니다 (갱신 실패: ${err.message})` })
+      return c.json({ status: 'success', data: stale.value, updatedAt: new Date().toISOString(), source: provider.source, cached: true, stale: true, message: '이전 자재가격 데이터를 표시합니다.' })
     }
-    return c.json(fail(`자재가격 정보를 불러올 수 없습니다: ${err.message}`, 'mock'), 502)
+    if (provider.source === 'live') {
+      const mock = new MockMaterialPriceProvider()
+      return c.json(ok(await mock.getPrices(keys), 'mock', '조달청 가격정보현황서비스 미승인 또는 응답 실패로 참고용 Mock 데이터를 표시합니다.'))
+    }
+    return c.json(fail('자재가격 정보를 불러올 수 없습니다', 'mock'), 502)
   }
 })
 

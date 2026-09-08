@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
-import { dashboardRepository } from '../lib/dashboardRepository'
+import { createDefaultConfig, dashboardRepository, syncDashboardConfigToServer } from '../lib/dashboardRepository'
 import type { Site } from '../../shared/types/site'
 
 interface SiteContextValue {
@@ -42,18 +42,22 @@ export function SiteProvider({ children }: { children: ReactNode }) {
       setActiveSiteIdState(null)
       return
     }
-    const saved = dashboardRepository.load()?.activeSiteId
+    const config = dashboardRepository.load() ?? createDefaultConfig()
+    const saved = config.activeSiteId
     const valid = saved && sites.some((s) => s.id === saved)
-    setActiveSiteIdState(valid ? saved! : sites[0].id)
+    const nextId = valid ? saved! : sites[0].id
+    setActiveSiteIdState(nextId)
+    const next = { ...config, activeSiteId: nextId }
+    dashboardRepository.save(next)
+    syncDashboardConfigToServer(next)
   }, [sites])
 
   const setActiveSiteId = useCallback((id: string) => {
     setActiveSiteIdState(id)
-    const config = dashboardRepository.load()
-    if (config) {
-      config.activeSiteId = id
-      dashboardRepository.save(config)
-    }
+    const config = dashboardRepository.load() ?? createDefaultConfig()
+    const next = { ...config, activeSiteId: id }
+    dashboardRepository.save(next)
+    syncDashboardConfigToServer(next)
   }, [])
 
   const activeSite = sites.find((s) => s.id === activeSiteId) ?? null

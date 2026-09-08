@@ -11,6 +11,8 @@ const GDELT_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
 const GDELT_QUERY = '(construction OR infrastructure OR "industrial accident" OR "real estate") sourcelang:korean'
 
 const FEEDS: RssFeedConfig[] = [
+  { url: 'https://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=NEWS', source: '국토교통부', category: '건설정책' },
+  { url: 'https://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=N01_B', source: '국토교통부', category: '건설정책' },
   { url: 'https://www.moel.go.kr/rss/policy.do', source: '고용노동부', category: '건설안전' },
   { url: 'https://www.moel.go.kr/rss/notice.do', source: '고용노동부', category: '건설안전' },
   { url: 'https://www.moel.go.kr/rss/lawinfo.do', source: '고용노동부', category: '건설정책' },
