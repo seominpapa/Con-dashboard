@@ -26,7 +26,7 @@ const ERROR_GUIDANCE: Record<string, string> = {
   '31': '인증키 사용기간이 만료되었습니다. 공공데이터포털에서 갱신해 주세요',
 }
 
-function safePpsError(status: number, code: unknown): PpsApiError {
+function safePpsError(status: number, code: unknown, structure = ''): PpsApiError {
   // 진단 표시만 정규화한다. 성공 판정은 기존 문자열 '00' 그대로 유지한다.
   const diagnosticCode = typeof code === 'string' && /^\d{2,3}$/.test(code) ? code
     : typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 999 ? String(code).padStart(2, '0') : null
@@ -34,7 +34,23 @@ function safePpsError(status: number, code: unknown): PpsApiError {
     : status >= 500 ? '기관 서버 오류입니다. 잠시 후 다시 시도해 주세요' : '알 수 없는 응답입니다. 아래 응답코드를 관리자에게 전달해 주세요'
   // 응답 원문/resultMsg에는 인증키가 포함될 수 있어 숫자 코드만 노출한다.
   const diagnostic = diagnosticCode ? `코드 ${diagnosticCode}` : code == null ? '응답코드 누락' : '응답코드 형식 오류'
-  return new PpsApiError(`조달청 가격정보 API: ${detail} (HTTP ${status}, ${diagnostic})`)
+  return new PpsApiError(`조달청 가격정보 API: ${detail} (HTTP ${status}, ${diagnostic})${structure ? ` [PPS 구조 v1: ${structure}]` : ''}`)
+}
+
+function responseStructure(json: unknown): string {
+  const kind = (value: unknown) => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value
+  // 임시 진단: 고정 경로·자료형만 표시한다. 원인 확인 후 제거하며 원문/임의 필드명은 수집하지 않는다.
+  const paths = ['response', 'response.header', 'response.header.resultCode', 'response.body', 'response.resultCode',
+    'response.0.header', 'response.0.body', 'header', 'header.resultCode', 'body', 'resultCode', '0.header', '0.body',
+    'OpenAPI_ServiceResponse', 'OpenAPI_ServiceResponse.cmmMsgHeader', 'OpenAPI_ServiceResponse.cmmMsgHeader.returnReasonCode',
+    'cmmMsgHeader', 'cmmMsgHeader.returnReasonCode', 'error', 'error.code', 'code', 'status', 'data']
+  const fields = paths.flatMap((path) => {
+    const value = path.split('.').reduce<unknown>((current, key) =>
+      current !== null && typeof current === 'object' && Object.hasOwn(current, key)
+        ? (current as Record<string, unknown>)[key] : undefined, json)
+    return value === undefined ? [] : [`${path}=${kind(value)}`]
+  })
+  return [`root=${kind(json)}`, ...fields].join(', ')
 }
 const KEYWORDS: Record<string, string[]> = {
   rebar: ['철근', '이형봉강'],
@@ -109,10 +125,11 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
     const gatewayCode = json?.OpenAPI_ServiceResponse?.cmmMsgHeader?.returnReasonCode
       ?? (/^\s*(?:<\?xml[^>]*>\s*)?<OpenAPI_ServiceResponse[\s>]/.test(text)
         ? /<returnReasonCode>\s*(\d{2})\s*<\/returnReasonCode>/.exec(text)?.[1] : undefined)
-    if (!response.ok || gatewayCode !== undefined) throw safePpsError(response.status, gatewayCode ?? resultCode)
+    const structure = resultCode == null && gatewayCode == null ? responseStructure(json) : ''
+    if (!response.ok || gatewayCode !== undefined) throw safePpsError(response.status, gatewayCode ?? resultCode, structure)
     if (!json) throw new PpsApiError(`조달청 API 응답 형식이 올바르지 않습니다 (HTTP ${response.status})`)
     if (resultCode === '03') return []
-    if (resultCode !== '00') throw safePpsError(response.status, resultCode)
+    if (resultCode !== '00') throw safePpsError(response.status, resultCode, structure)
     if (!envelope.body || typeof envelope.body !== 'object') throw new PpsApiError(`조달청 API 응답 형식이 올바르지 않습니다 (HTTP ${response.status})`)
     return asItems(envelope)
   }

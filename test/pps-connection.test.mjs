@@ -101,6 +101,29 @@ test('PPS missing or malformed diagnostic codes never echo arbitrary response co
   }
 })
 
+test('PPS missing-code diagnostics reveal only allowlisted paths and types, never payload keys or values', async (t) => {
+  let payload
+  const { connect } = setup(t, () => Response.json(payload))
+  for (const [value, expected] of [
+    [{ response: { header: { resultMsg: secret }, body: { items: [] } }, [secret]: secret }, ['root=object', 'response.header=object', 'response.body=object']],
+    [{ response: [{ header: { resultCode: '00' }, body: { items: [] } }] }, ['response=array', 'response.0.header=object']],
+    [{ header: [{ resultCode: '00' }], body: secret }, ['header=array', 'body=string']],
+    [{ error: { code: secret, message: secret } }, ['error=object', 'error.code=string']],
+    [[{ header: { resultMsg: secret } }], ['root=array', '0.header=object']],
+    [secret, ['root=string']],
+    [{ [secret]: { [secret]: secret } }, ['root=object']],
+  ]) {
+    payload = value
+    const response = await connect()
+    assert.equal(response.status, 400)
+    const message = (await response.json()).message
+    assert.match(message, /PPS 구조 v1/)
+    for (const field of expected) assert.ok(message.includes(field), field)
+    assert.ok(!message.includes(secret))
+    assert.ok(message.length < 1000)
+  }
+})
+
 for (const [name, upstream, expected] of [
   ['timeout', () => { throw new DOMException(secret, 'TimeoutError') }, /시간.*초과/],
   ['network', () => { throw new TypeError(secret) }, /통신/],
