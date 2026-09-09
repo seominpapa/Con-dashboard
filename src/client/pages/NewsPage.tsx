@@ -40,7 +40,7 @@ export function NewsPage() {
         </ul>
       )}
       <p className="mt-3 text-[11px] text-slate-400">
-        뉴스 데이터: <a href="https://news.google.com/?hl=ko&gl=KR&ceid=KR:ko" target="_blank" rel="noreferrer" className="hover:text-blue-600 hover:underline">Google 뉴스</a> RSS 검색
+        뉴스 데이터: 건설타임즈·대한전문건설신문·안전저널·안전신문 공개 RSS 및 Bing 뉴스 검색 RSS
       </p>
     </div>
   )

@@ -3,22 +3,23 @@ import type { NewsItem, NewsCategory } from '../../../shared/types/news'
 
 interface NewsFeed {
   id: string
-  query: string
+  url: string
+  source: string
   category: NewsCategory
 }
 
-// 정부 RSS·GDELT는 Cloudflare에서 차단·시간초과되어 Google 뉴스 RSS 검색으로 대체한다.
-const FEEDS: NewsFeed[] = [
-  { id: 'POLICY', query: '건설 정책 OR 국토교통부 건설 OR 건설산업', category: '건설정책' },
-  { id: 'SAFETY', query: '건설현장 사고 OR 건설 중대재해 OR 건설현장 안전', category: '건설안전' },
-  { id: 'ORDER', query: '건설사 수주 OR 건설 입찰 OR 시공사 선정', category: '수주' },
-  { id: 'ESTATE', query: '아파트 분양 OR 주택 공급 OR 부동산 시장', category: '부동산' },
-  { id: 'TECH', query: '스마트건설 OR 건설 AI OR 해외건설 수주 OR SOC 사업', category: '스마트건설' },
-]
+const bing = (query: string) => `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss&setlang=ko-KR&cc=KR`
 
-function feedUrl(feed: NewsFeed): string {
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(`${feed.query} when:7d`)}&hl=ko&gl=KR&ceid=KR:ko`
-}
+// 정부 RSS·GDELT·Google 뉴스는 Cloudflare 서버에서 차단(HTML/503)·시간초과된다. 건설 전문지 RSS와 Bing 뉴스 검색 RSS를 쓴다.
+const FEEDS: NewsFeed[] = [
+  { id: 'CONSTIMES', url: 'https://www.constimes.co.kr/rss/allArticle.xml', source: '건설타임즈', category: '건설정책' },
+  { id: 'KOSCAJ', url: 'https://www.koscaj.com/rss/allArticle.xml', source: '대한전문건설신문', category: '건설정책' },
+  { id: 'ANJUNJ', url: 'https://www.anjunj.com/rss/allArticle.xml', source: '안전저널', category: '건설안전' },
+  { id: 'SAFETYNEWS', url: 'https://www.safetynews.co.kr/rss/allArticle.xml', source: '안전신문', category: '건설안전' },
+  { id: 'BING_ORDER', url: bing('건설사 수주 OR 건설 입찰'), source: 'Bing 뉴스', category: '수주' },
+  { id: 'BING_ESTATE', url: bing('아파트 분양 OR 주택 공급'), source: 'Bing 뉴스', category: '부동산' },
+  { id: 'BING_TECH', url: bing('스마트건설 OR 해외건설 OR 건설 AI'), source: 'Bing 뉴스', category: '스마트건설' },
+]
 
 type NewsFailureCode = `HTTP_${number}` | 'TIMEOUT' | 'FORMAT' | 'NETWORK'
   | 'FORMAT_EMPTY' | 'FORMAT_HTML' | 'FORMAT_RSS' | 'FORMAT_OTHER'
@@ -74,7 +75,9 @@ function decodeEntities(text: string): string {
 }
 
 function toIsoDate(value: string): string {
-  const date = new Date(value)
+  // 국내 언론사 RSS는 'YYYY-MM-DD HH:mm:ss'(KST)로 준다.
+  const kst = value.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})$/)
+  const date = new Date(kst ? `${kst[1]}T${kst[2]}+09:00` : value)
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
 }
 
@@ -95,7 +98,7 @@ function safeArticleUrl(value: string): string | null {
   }
 }
 
-export function parseRssItems(xml: string, fallbackCategory: NewsCategory): NewsItem[] {
+export function parseRssItems(xml: string, feedSource: string, fallbackCategory: NewsCategory): NewsItem[] {
   if (!/<rss\b[^>]*>[\s\S]*<channel\b[^>]*>[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(xml)) {
     const code = !xml.trim() ? 'FORMAT_EMPTY'
       : /<!doctype\s+html\b|<html\b/i.test(xml) ? 'FORMAT_HTML'
@@ -103,8 +106,8 @@ export function parseRssItems(xml: string, fallbackCategory: NewsCategory): News
     throw new NewsSourceFailure(code)
   }
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].flatMap((match) => {
-    const source = decodeEntities(extractTag(match[1], 'source')) || 'Google 뉴스'
-    // Google 뉴스 제목은 " - 매체명"으로 끝난다.
+    // Bing은 <News:Source>, 검색형 피드는 <source>에 매체명을 담는다. 제목 끝의 " - 매체명"은 제거한다.
+    const source = decodeEntities(extractTag(match[1], 'News:Source') || extractTag(match[1], 'source')) || feedSource
     const rawTitle = decodeEntities(extractTag(match[1], 'title'))
     const title = (rawTitle.endsWith(` - ${source}`) ? rawTitle.slice(0, -source.length - 3) : rawTitle).trim()
     const url = safeArticleUrl(extractTag(match[1], 'link'))
@@ -119,9 +122,9 @@ export class RssNewsProvider implements NewsProvider {
 
   async getNews(categories: NewsCategory[], limit = 10): Promise<NewsItem[]> {
     const results = await Promise.allSettled(FEEDS.map(async (feed) => {
-      const response = await fetch(feedUrl(feed), { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) })
+      const response = await fetch(feed.url, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) })
       if (!response.ok) throw new NewsSourceFailure(`HTTP_${response.status}`)
-      return parseRssItems(await response.text(), feed.category)
+      return parseRssItems(await response.text(), feed.source, feed.category)
     }))
 
     const seen = new Set<string>()

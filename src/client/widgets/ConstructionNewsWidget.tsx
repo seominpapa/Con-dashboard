@@ -25,9 +25,7 @@ export function ConstructionNewsWidget({}: WidgetProps) {
       ) : (
         <p role="status" className="text-xs text-slate-400">{loading ? '건설뉴스를 불러오는 중입니다…' : '뉴스가 없습니다'}</p>
       )}
-      <a href="https://news.google.com/?hl=ko&gl=KR&ceid=KR:ko" target="_blank" rel="noreferrer" className="mt-2 block text-[10px] text-slate-400 hover:text-blue-600 hover:underline">
-        뉴스 데이터: Google 뉴스 RSS
-      </a>
+      <p className="mt-2 text-[10px] text-slate-400">뉴스 데이터: 건설타임즈·대한전문건설신문·안전저널·안전신문 RSS, Bing 뉴스 검색</p>
     </WidgetShell>
   )
 }
