@@ -197,7 +197,7 @@ test('all failed news sources expose only fixed IDs and failure codes, never ups
     assert.match(error.message, /GDELT=HTTP_429/)
     assert.match(error.message, /MOLIT_NEWS=TIMEOUT/)
     assert.match(error.message, /MOLIT_N01_B=NETWORK/)
-    assert.match(error.message, /MOEL_POLICY=FORMAT/)
+    assert.match(error.message, /MOEL_POLICY=FORMAT_HTML(?:,|\])/)
     assert.match(error.message, /MOEL_NOTICE=NETWORK/)
     assert.match(error.message, /MOEL_LAWINFO=NETWORK/)
     assert.ok(!error.message.includes(privateDetail))
@@ -205,6 +205,25 @@ test('all failed news sources expose only fixed IDs and failure codes, never ups
     return true
   })
 })
+
+for (const [code, body] of [
+  ['FORMAT_EMPTY', '  \n '],
+  ['FORMAT_HTML', '<!DOCTYPE html><html>private-response-body</html>'],
+  ['FORMAT_RSS', '<rss><channel>private-response-body'],
+  ['FORMAT_OTHER', '{"private-response-body":true}'],
+]) {
+  test(`news RSS diagnostic distinguishes ${code} without exposing its body`, async (t) => {
+    t.mock.method(globalThis, 'fetch', async (input) => new URL(String(input)).pathname === '/rss/policy.do'
+      ? new Response(body)
+      : new Response('', { status: 503 }))
+    await assert.rejects(new RssNewsProvider().getNews([], 10), (error) => {
+      assert.ok(error.message.includes(`MOEL_POLICY=${code}`))
+      assert.ok(!error.message.includes('private-response-body'))
+      assert.ok(!error.message.includes('<rss>'))
+      return true
+    })
+  })
+}
 
 test('public API connections accept an optional ISO expiry date and return its derived state', () => {
   const integrationTypes = read('src/shared/types/integration.ts')

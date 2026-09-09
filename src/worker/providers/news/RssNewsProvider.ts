@@ -19,6 +19,7 @@ const FEEDS: RssFeedConfig[] = [
 ]
 
 type NewsFailureCode = `HTTP_${number}` | 'TIMEOUT' | 'FORMAT' | 'NETWORK'
+  | 'FORMAT_EMPTY' | 'FORMAT_HTML' | 'FORMAT_RSS' | 'FORMAT_OTHER'
 class NewsSourceFailure extends Error {
   readonly code: NewsFailureCode
   constructor(code: NewsFailureCode) { super(code); this.code = code }
@@ -98,7 +99,10 @@ function safeArticleUrl(value: string): string | null {
 
 function parseRssItems(xml: string, source: string, fallbackCategory: NewsCategory): NewsItem[] {
   if (!/<rss\b[^>]*>[\s\S]*<channel\b[^>]*>[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(xml)) {
-    throw new NewsSourceFailure('FORMAT')
+    const code = !xml.trim() ? 'FORMAT_EMPTY'
+      : /<!doctype\s+html\b|<html\b/i.test(xml) ? 'FORMAT_HTML'
+      : /<rss\b/i.test(xml) ? 'FORMAT_RSS' : 'FORMAT_OTHER'
+    throw new NewsSourceFailure(code)
   }
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].flatMap((match) => {
     const title = decodeEntities(extractTag(match[1], 'title'))
