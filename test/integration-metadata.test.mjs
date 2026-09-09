@@ -84,7 +84,9 @@ test('metadata can record a failed or not-yet-connected provider without pretend
   assert.equal(row.dbConfigured, false)
   assert.equal(row.memo, '승인 대기')
   const envRow = (await list({ MATERIAL_PRICE_SERVICE_KEY: 'test-only' })).find((r) => r.provider === 'material_prices')
-  assert.equal(envRow.status, 'CONNECTED', 'management-only rows must not mask ENV configuration')
+  assert.equal(envRow.status, 'DISCONNECTED', 'ENV credentials must not imply a successful price-service check')
+  assert.equal(envRow.envFallbackAvailable, true, 'management-only rows must not mask ENV availability')
+  assert.equal(envRow.lastCheckedAt, null)
 })
 
 test('replacing credentials preserves previously saved management information', async (t) => {

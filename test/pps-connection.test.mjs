@@ -8,6 +8,8 @@ import { createServer } from 'vite'
 
 const vite = await createServer({ appType: 'custom', logLevel: 'error' })
 const { default: routes } = await vite.ssrLoadModule('/src/worker/routes/admin/integrations.ts')
+const { IntegrationRepository } = await vite.ssrLoadModule('/src/worker/repositories/IntegrationRepository.ts')
+const { getMaterialPriceProvider } = await vite.ssrLoadModule('/src/worker/providers/materials/index.ts')
 after(() => vite.close())
 const secret = randomUUID()
 function setup(t, upstream) {
@@ -27,8 +29,62 @@ function setup(t, upstream) {
   const env = { DB, AUTH_SECRET: 's'.repeat(32) }
   const connect = () => app.request('/material_prices/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ credential: { apiKey: secret } }) }, env)
-  return { sqlite, calls, connect, retest: () => app.request('/material_prices/test', { method: 'POST' }, env) }
+  return { sqlite, calls, connect, env, repo: new IntegrationRepository(DB, env.AUTH_SECRET),
+    summary: async () => (await (await app.request('/', {}, env)).json()).data.find((row) => row.provider === 'material_prices'),
+    retest: () => app.request('/material_prices/test', { method: 'POST' }, env) }
 }
+
+test('PPS saved G2B fallback requires its own successful check and retains failures', async (t) => {
+  let reject = false
+  const { sqlite, calls, repo, summary, retest } = setup(t, () => Response.json({ response: {
+    header: { resultCode: reject ? '30' : '00' }, body: { totalCount: 0 },
+  } }))
+  await repo.upsertCredential({ provider: 'g2b', type: 'public_api', credential: { apiKey: secret }, updatedBy: 'admin' })
+  const initial = await summary()
+  assert.equal(initial.credentialFallbackAvailable, true)
+  assert.equal(initial.status, 'DISCONNECTED')
+  assert.equal(initial.lastCheckedAt, null)
+  const checked = await retest()
+  assert.equal(checked.status, 200)
+  assert.equal((await checked.json()).data.testResult.ok, true)
+  assert.equal(calls[0].searchParams.get('serviceKey'), secret)
+  assert.equal((await summary()).status, 'CONNECTED')
+  assert.equal(sqlite.prepare("SELECT encrypted_credential FROM integrations WHERE provider='material_prices'").get().encrypted_credential, null)
+  reject = true
+  assert.equal((await (await retest()).json()).data.testResult.ok, false)
+  const failed = await summary()
+  assert.equal(failed.status, 'ERROR')
+  assert.match(failed.lastError, /코드 30/)
+  assert.ok(!JSON.stringify(failed).includes(secret))
+  assert.equal((await repo.getSummary('g2b')).status, 'CONNECTED')
+  await repo.updateMetadata('material_prices', { expiresAt: '2000-01-01' }, 'admin')
+  assert.equal((await summary()).status, 'EXPIRED')
+})
+
+test('PPS runtime and connection test use the same saved and environment key priority', async (t) => {
+  const { calls, repo, env, summary, retest, connect } = setup(t, () => Response.json({ response: {
+    header: { resultCode: '00' }, body: { totalCount: 0 },
+  } }))
+  env.G2B_SERVICE_KEY = randomUUID()
+  assert.equal((await summary()).status, 'DISCONNECTED')
+  for (const configure of [
+    async () => env.G2B_SERVICE_KEY,
+    async () => (env.MATERIAL_PRICE_SERVICE_KEY = randomUUID()),
+    async () => {
+      const apiKey = randomUUID()
+      await repo.upsertCredential({ provider: 'g2b', type: 'public_api', credential: { apiKey }, updatedBy: 'admin' })
+      return apiKey
+    },
+    async () => { assert.equal((await connect()).status, 200); return secret },
+  ]) {
+    const expected = await configure()
+    assert.equal((await (await retest()).json()).data.testResult.ok, true)
+    assert.equal(calls.at(-1).searchParams.get('serviceKey'), expected)
+    await (await getMaterialPriceProvider(env)).getPrices([])
+    assert.equal(calls.at(-1).searchParams.get('serviceKey'), expected)
+    assert.ok(!JSON.stringify(await summary()).includes(expected))
+  }
+})
 
 test('PPS no-data response saves credential and explicitly reports no data on connect/retest', async (t) => {
   const { sqlite, calls, connect, retest } = setup(t, () => Response.json({ response: { header: { resultCode: '03' } } }))

@@ -75,6 +75,9 @@ function safeArticleUrl(value: string): string | null {
 }
 
 function parseRssItems(xml: string, source: string, fallbackCategory: NewsCategory): NewsItem[] {
+  if (!/<rss\b[^>]*>[\s\S]*<channel\b[^>]*>[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(xml)) {
+    throw new Error('뉴스 RSS 응답 형식이 올바르지 않습니다')
+  }
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].flatMap((match) => {
     const title = decodeEntities(extractTag(match[1], 'title'))
     const url = safeArticleUrl(extractTag(match[1], 'link'))
@@ -98,7 +101,9 @@ interface GdeltArticle {
 }
 
 function parseGdelt(data: unknown, fallbackCategory: NewsCategory): NewsItem[] {
-  if (!data || typeof data !== 'object' || !Array.isArray((data as { articles?: unknown }).articles)) return []
+  if (!data || typeof data !== 'object' || !Array.isArray((data as { articles?: unknown }).articles)) {
+    throw new Error('GDELT 뉴스 응답 형식이 올바르지 않습니다')
+  }
   return (data as { articles: GdeltArticle[] }).articles.flatMap((article) => {
     if (typeof article.title !== 'string' || typeof article.url !== 'string') return []
     const url = safeArticleUrl(article.url)
@@ -131,12 +136,12 @@ export class RssNewsProvider implements NewsProvider {
     }).toString()
 
     const results = await Promise.allSettled([
-      fetch(gdeltUrl, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' } }).then(async (response) => {
+      fetch(gdeltUrl, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) }).then(async (response) => {
         if (!response.ok) throw new Error(`GDELT fetch failed (${response.status})`)
         return parseGdelt(await response.json(), fallbackCategory)
       }),
       ...FEEDS.map(async (feed) => {
-        const response = await fetch(feed.url, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' } })
+        const response = await fetch(feed.url, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) })
         if (!response.ok) throw new Error(`RSS fetch failed: ${feed.url} (${response.status})`)
         return parseRssItems(await response.text(), feed.source, feed.category)
       }),

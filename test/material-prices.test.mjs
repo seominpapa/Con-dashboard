@@ -7,6 +7,23 @@ import { PUBLIC_API_PROVIDERS } from '../src/shared/types/integration.ts'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
+test('PPS connection and prices query only today in Korea, including UTC date boundaries', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-08T15:01:00Z') })
+  const requests = []
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    requests.push(new URL(String(input)))
+    return Response.json({ response: { header: { resultCode: '00' }, body: { numOfRows: 1, pageNo: 1, totalCount: 0 } } })
+  })
+  const provider = new PpsMaterialPriceProvider('synthetic-key')
+  assert.match(await provider.healthCheck(), /연결 확인 완료.*조회 결과 없음/)
+  await assert.rejects(() => provider.getPrices(['rebar']), /선택한 자재 가격이 없습니다/)
+  t.mock.timers.setTime(new Date('2026-12-31T15:01:00Z').getTime())
+  assert.match(await provider.healthCheck(), /연결 확인 완료.*조회 결과 없음/)
+  assert.deepEqual(requests.map(({ searchParams }) => [searchParams.get('inqryBgnDate'), searchParams.get('inqryEndDate')]), [
+    ['20260909', '20260909'], ['20260909', '20260909'], ['20270101', '20270101'],
+  ])
+})
+
 test('PPS material provider calls the official total endpoint and does not invent a trend', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (input) => {

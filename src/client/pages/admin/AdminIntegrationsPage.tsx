@@ -151,7 +151,7 @@ export function AdminIntegrationsPage() {
                 </p>
                 <p className="text-xs text-slate-400">
                   {r.provider === 'naver_dynamic_map' && r.status === 'CONNECTED' ? '등록됨 · 지도에서 인증 확인 필요' : meta.label}
-                  {r.dbConfigured ? ' · 관리자 등록됨' : r.credentialFallbackAvailable ? (r.provider === 'kma_alert' ? ' · 단기예보 자격증명 재사용 중 (특보 승인 필요)' : ' · 나라장터 자격증명 재사용 중') : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ['its', 'naver_maps', 'naver_dynamic_map', 'airkorea_station'].includes(r.provider) ? ' · 미설정' : ' · 미설정 (Mock 사용 중)'}
+                  {r.dbConfigured ? ' · 관리자 등록됨' : r.credentialFallbackAvailable ? (r.provider === 'kma_alert' ? ' · 단기예보 자격증명 재사용 중 (특보 승인 필요)' : r.lastCheckedAt ? ' · 나라장터 자격증명 재사용 중' : ' · 나라장터 자격증명 재사용 가능 · 가격정보 연결 테스트 필요') : r.envFallbackAvailable ? ' · ENV 폴백 사용 중' : ['its', 'naver_maps', 'naver_dynamic_map', 'airkorea_station'].includes(r.provider) ? ' · 미설정' : ' · 미설정 (Mock 사용 중)'}
                   {r.lastError ? ` · ${r.lastError}` : ''}
                 </p>
                 <p className={cn('mt-0.5 text-[11px]', r.daysUntilExpiry !== null && r.daysUntilExpiry < 0 ? 'text-amber-600' : 'text-slate-400')}>

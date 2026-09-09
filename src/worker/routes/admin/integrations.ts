@@ -10,6 +10,7 @@ import { NaverMapsApiError, NaverMapsGeocodingProvider } from '../../providers/g
 import { todayKeySeoul } from '../../../shared/utils/timezone'
 import { SettingsRepository } from '../../repositories/SettingsRepository'
 import { PpsApiError } from '../../providers/materials/PpsMaterialPriceProvider'
+import { getMaterialPriceCredential } from '../../providers/materials'
 
 const app = new Hono<AppEnv>()
 
@@ -185,7 +186,7 @@ app.get('/', async (c) => {
       docsUrl: p.docsUrl,
       status: daysUntilExpiry !== null && daysUntilExpiry < 0
         ? 'EXPIRED'
-        : p.key === 'kma_alert' ? summary?.status ?? 'DISCONNECTED'
+        : p.key === 'kma_alert' || p.key === 'material_prices' ? summary?.status ?? 'DISCONNECTED'
         : credentialFallbackAvailable || (envFallbackAvailable && !summary?.connectedAt && !summary?.lastCheckedAt)
           ? 'CONNECTED' : summary?.status ?? (envFallbackAvailable ? 'CONNECTED' : 'DISCONNECTED'),
       connectedAt: summary?.connectedAt ?? null,
@@ -269,7 +270,9 @@ app.post('/:provider/test', async (c) => {
   const repo = new IntegrationRepository(c.env.DB, getAuthSecretFromEnv(c.env))
   let stored: Record<string, string> | null = null
   try {
-    stored = await repo.getDecryptedCredential<Record<string, string>>(provider)
+    stored = provider === 'material_prices'
+      ? await getMaterialPriceCredential(c.env)
+      : await repo.getDecryptedCredential<Record<string, string>>(provider)
   } catch {
     return c.json(fail('저장된 자격증명을 복호화할 수 없습니다. 다시 연결해 주세요.', 'live'), 400)
   }

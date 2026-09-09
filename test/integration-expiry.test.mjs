@@ -182,10 +182,14 @@ test('public API summaries surface metadata-backed expiry state without expiring
     status: rows.material_prices.status,
     dbConfigured: rows.material_prices.dbConfigured,
     credentialFallbackAvailable: rows.material_prices.credentialFallbackAvailable,
+    envFallbackAvailable: rows.material_prices.envFallbackAvailable,
+    lastCheckedAt: rows.material_prices.lastCheckedAt,
   }, {
-    status: 'CONNECTED',
+    status: 'DISCONNECTED',
     dbConfigured: false,
     credentialFallbackAvailable: true,
+    envFallbackAvailable: false,
+    lastCheckedAt: null,
   })
 })
 

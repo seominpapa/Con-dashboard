@@ -143,6 +143,46 @@ test('free news provider returns an empty list when sources succeed without a re
   }
 })
 
+test('news source failures disguised as HTTP 200 do not replace saved news with an empty success', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input) => new Response(new URL(String(input)).hostname === 'api.gdeltproject.org'
+    ? JSON.stringify({ error: 'temporarily unavailable' })
+    : '<html><body>Service temporarily unavailable</body></html>')
+  try {
+    await assert.rejects(new RssNewsProvider().getNews([], 10), /뉴스 소스 조회에 실패/)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('a valid empty RSS channel remains a successful empty result', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (input) => new URL(String(input)).hostname === 'api.gdeltproject.org'
+    ? new Response('', { status: 429 })
+    : new Response('<?xml version="1.0"?><rss version="2.0"><channel><title>보도자료</title></channel></rss>')
+  try {
+    assert.deepEqual(await new RssNewsProvider().getNews([], 10), [])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('each news source has a timeout signal so one stalled source cannot hang the widget', async () => {
+  const originalFetch = globalThis.fetch
+  const signals = []
+  globalThis.fetch = async (_input, init) => {
+    signals.push(init?.signal)
+    return new Response('', { status: 503 })
+  }
+  try {
+    await assert.rejects(new RssNewsProvider().getNews([], 10))
+    assert.equal(signals.length, 6)
+    assert.ok(signals.every((signal) => signal instanceof AbortSignal))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('public API connections accept an optional ISO expiry date and return its derived state', () => {
   const integrationTypes = read('src/shared/types/integration.ts')
   const adminRoute = read('src/worker/routes/admin/integrations.ts')

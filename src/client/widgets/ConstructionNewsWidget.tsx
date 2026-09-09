@@ -23,10 +23,10 @@ export function ConstructionNewsWidget({}: WidgetProps) {
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-slate-400">뉴스가 없습니다</p>
+        <p role="status" className="text-xs text-slate-400">{loading ? '건설뉴스를 불러오는 중입니다…' : '뉴스가 없습니다'}</p>
       )}
       <a href="https://www.gdeltproject.org/" target="_blank" rel="noreferrer" className="mt-2 block text-[10px] text-slate-400 hover:text-blue-600 hover:underline">
-        뉴스 데이터: GDELT Project
+        뉴스 데이터: 공공기관 RSS · GDELT Project
       </a>
     </WidgetShell>
   )

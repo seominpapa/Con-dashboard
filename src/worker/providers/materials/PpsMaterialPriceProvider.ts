@@ -1,5 +1,6 @@
 import type { MaterialPriceItem } from '../../../shared/types/market'
 import { MATERIAL_CATALOG } from '../../../shared/types/market.ts'
+import { todayKeySeoul } from '../../../shared/utils/timezone.ts'
 import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredentials.ts'
 import type { MaterialPriceProvider } from './MaterialPriceProvider'
 
@@ -77,10 +78,6 @@ function asItems(envelope: any): any[] {
   return items?.item ? [items.item] : []
 }
 
-function dateKey(date: Date): string {
-  return date.toISOString().slice(0, 10).replaceAll('-', '')
-}
-
 function numberFrom(item: any): number {
   for (const key of ['unitPrce', 'unitPrc', 'prce', 'price', 'cntrctPrce', 'stdAmt']) {
     const value = Number(String(item?.[key] ?? '').replaceAll(',', ''))
@@ -98,15 +95,14 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
   }
 
   private async fetchItems(numOfRows = 1000): Promise<any[]> {
-    const endDate = new Date()
-    const beginDate = new Date(endDate.getTime() - 366 * 86400000)
+    const today = todayKeySeoul().replaceAll('-', '')
     const url = new URL(ENDPOINT)
     url.searchParams.set('serviceKey', this.serviceKey)
     url.searchParams.set('numOfRows', String(numOfRows))
     url.searchParams.set('pageNo', '1')
     url.searchParams.set('inqryDiv', '1')
-    url.searchParams.set('inqryBgnDate', dateKey(beginDate))
-    url.searchParams.set('inqryEndDate', dateKey(endDate))
+    url.searchParams.set('inqryBgnDate', today)
+    url.searchParams.set('inqryEndDate', today)
     url.searchParams.set('type', 'json')
 
     let response: Response

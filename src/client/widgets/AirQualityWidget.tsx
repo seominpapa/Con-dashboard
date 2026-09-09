@@ -47,7 +47,7 @@ export function AirQualityWidget({ siteId }: WidgetProps) {
           </div>
         </div>
       ) : (
-        <p className="text-xs text-slate-400">데이터 없음</p>
+        <p role="status" className="text-xs text-slate-400">{loading ? '가까운 측정소의 대기질을 불러오는 중입니다…' : '데이터 없음'}</p>
       )}
     </WidgetShell>
   )
