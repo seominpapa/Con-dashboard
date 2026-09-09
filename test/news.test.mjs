@@ -183,6 +183,29 @@ test('each news source has a timeout signal so one stalled source cannot hang th
   }
 })
 
+test('all failed news sources expose only fixed IDs and failure codes, never upstream error details', async (t) => {
+  const privateDetail = 'private-upstream-body-and-credential'
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const url = new URL(String(input))
+    if (url.hostname === 'api.gdeltproject.org') return new Response(privateDetail, { status: 429 })
+    if (url.searchParams.get('rss_id') === 'NEWS') throw new DOMException(privateDetail, 'TimeoutError')
+    if (url.pathname === '/rss/policy.do') return new Response(`<html>${privateDetail}</html>`)
+    throw new Error(privateDetail)
+  })
+  await assert.rejects(new RssNewsProvider().getNews([], 10), (error) => {
+    assert.equal(error.name, 'NewsSourcesUnavailableError')
+    assert.match(error.message, /GDELT=HTTP_429/)
+    assert.match(error.message, /MOLIT_NEWS=TIMEOUT/)
+    assert.match(error.message, /MOLIT_N01_B=NETWORK/)
+    assert.match(error.message, /MOEL_POLICY=FORMAT/)
+    assert.match(error.message, /MOEL_NOTICE=NETWORK/)
+    assert.match(error.message, /MOEL_LAWINFO=NETWORK/)
+    assert.ok(!error.message.includes(privateDetail))
+    assert.ok(!error.message.includes('https://'))
+    return true
+  })
+})
+
 test('public API connections accept an optional ISO expiry date and return its derived state', () => {
   const integrationTypes = read('src/shared/types/integration.ts')
   const adminRoute = read('src/worker/routes/admin/integrations.ts')

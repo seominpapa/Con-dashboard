@@ -18,6 +18,28 @@ const FEEDS: RssFeedConfig[] = [
   { url: 'https://www.moel.go.kr/rss/lawinfo.do', source: '고용노동부', category: '건설정책' },
 ]
 
+type NewsFailureCode = `HTTP_${number}` | 'TIMEOUT' | 'FORMAT' | 'NETWORK'
+class NewsSourceFailure extends Error {
+  readonly code: NewsFailureCode
+  constructor(code: NewsFailureCode) { super(code); this.code = code }
+}
+
+export class NewsSourcesUnavailableError extends Error {
+  constructor(results: PromiseSettledResult<NewsItem[]>[]) {
+    const ids = ['GDELT', 'MOLIT_NEWS', 'MOLIT_N01_B', 'MOEL_POLICY', 'MOEL_NOTICE', 'MOEL_LAWINFO']
+    const details = ids.map((id, index) => {
+      const result = results[index]
+      const error = result?.status === 'rejected' ? result.reason : undefined
+      const code = error instanceof NewsSourceFailure ? error.code
+        : error instanceof Error && error.name === 'TimeoutError' ? 'TIMEOUT'
+        : error instanceof SyntaxError ? 'FORMAT' : 'NETWORK'
+      return `${id}=${code}`
+    }).join(', ')
+    super(`무료 뉴스 소스 조회에 실패했습니다 [${details}]`)
+    this.name = 'NewsSourcesUnavailableError'
+  }
+}
+
 const CATEGORY_RULES: [NewsCategory, RegExp][] = [
   ['중대재해', /중대재해|사망사고|산업재해|재해사례|중대재해사이렌/],
   ['건설안전', /안전|사고|재해|산재|붕괴|점검/],
@@ -76,7 +98,7 @@ function safeArticleUrl(value: string): string | null {
 
 function parseRssItems(xml: string, source: string, fallbackCategory: NewsCategory): NewsItem[] {
   if (!/<rss\b[^>]*>[\s\S]*<channel\b[^>]*>[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(xml)) {
-    throw new Error('뉴스 RSS 응답 형식이 올바르지 않습니다')
+    throw new NewsSourceFailure('FORMAT')
   }
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].flatMap((match) => {
     const title = decodeEntities(extractTag(match[1], 'title'))
@@ -102,7 +124,7 @@ interface GdeltArticle {
 
 function parseGdelt(data: unknown, fallbackCategory: NewsCategory): NewsItem[] {
   if (!data || typeof data !== 'object' || !Array.isArray((data as { articles?: unknown }).articles)) {
-    throw new Error('GDELT 뉴스 응답 형식이 올바르지 않습니다')
+    throw new NewsSourceFailure('FORMAT')
   }
   return (data as { articles: GdeltArticle[] }).articles.flatMap((article) => {
     if (typeof article.title !== 'string' || typeof article.url !== 'string') return []
@@ -137,12 +159,12 @@ export class RssNewsProvider implements NewsProvider {
 
     const results = await Promise.allSettled([
       fetch(gdeltUrl, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) }).then(async (response) => {
-        if (!response.ok) throw new Error(`GDELT fetch failed (${response.status})`)
+        if (!response.ok) throw new NewsSourceFailure(`HTTP_${response.status}`)
         return parseGdelt(await response.json(), fallbackCategory)
       }),
       ...FEEDS.map(async (feed) => {
         const response = await fetch(feed.url, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) })
-        if (!response.ok) throw new Error(`RSS fetch failed: ${feed.url} (${response.status})`)
+        if (!response.ok) throw new NewsSourceFailure(`HTTP_${response.status}`)
         return parseRssItems(await response.text(), feed.source, feed.category)
       }),
     ])
@@ -160,7 +182,7 @@ export class RssNewsProvider implements NewsProvider {
       .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
       .slice(0, limit)
 
-    if (results.every((result) => result.status === 'rejected')) throw new Error('무료 뉴스 소스 조회에 실패했습니다')
+    if (results.every((result) => result.status === 'rejected')) throw new NewsSourcesUnavailableError(results)
     return news
   }
 }

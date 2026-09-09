@@ -125,3 +125,16 @@ test('news with no prior snapshot reports genuine empty results without persisti
   const found = await (await request('?limit=6')).json()
   assert.equal(found.data.length, 2)
 })
+
+test('news route exposes safe source failure diagnostics without raw upstream details', async (t) => {
+  const { newWorker } = await setup(t)
+  const privateDetail = 'private-upstream-body-and-credential'
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error(privateDetail) })
+  const request = await newWorker()
+  const response = await request('?limit=6')
+  assert.equal(response.status, 502)
+  const result = await response.json()
+  assert.match(result.message, /GDELT=NETWORK/)
+  assert.match(result.message, /MOEL_POLICY=NETWORK/)
+  assert.ok(!JSON.stringify(result).includes(privateDetail))
+})
