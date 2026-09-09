@@ -64,7 +64,6 @@ export const DEFAULT_WIDGET_ORDER = [
   'constructionNews',
   'marketSummary',
   'exchangeRate',
-  'materialPrice',
   'law',
 ]
 
@@ -74,6 +73,23 @@ export function createDefaultConfig(): DashboardConfig {
     instanceId: `${widgetId}-default-${i}`,
   }))
   return { desktopOrder: order, mobileOrder: order, activeSiteId: null }
+}
+
+/** 기존 주요자재가격 위젯을 건설시장 종합에 흡수한다. 저장된 배치도 새 UI와 맞춰 한 번만 정리한다. */
+export function migrateMaterialPriceWidget(config: DashboardConfig): DashboardConfig {
+  const migrateOrder = (order: DashboardWidgetInstance[]) => {
+    const legacy = order.find((widget) => widget.widgetId === 'materialPrice')
+    if (!legacy) return order
+    const summary = order.find((widget) => widget.widgetId === 'marketSummary')
+    if (!summary) return order.map((widget) => widget.instanceId === legacy.instanceId ? { ...widget, widgetId: 'marketSummary' } : widget)
+    const materialKeys = Array.isArray(legacy.settings?.materialKeys) && !Array.isArray(summary.settings?.materialKeys)
+      ? { materialKeys: legacy.settings.materialKeys } : {}
+    return order.filter((widget) => widget.instanceId !== legacy.instanceId).map((widget) =>
+      widget.instanceId === summary.instanceId ? { ...widget, settings: { ...widget.settings, ...materialKeys } } : widget)
+  }
+  const desktopOrder = migrateOrder(config.desktopOrder)
+  const mobileOrder = migrateOrder(config.mobileOrder)
+  return desktopOrder === config.desktopOrder && mobileOrder === config.mobileOrder ? config : { ...config, desktopOrder, mobileOrder }
 }
 
 /**

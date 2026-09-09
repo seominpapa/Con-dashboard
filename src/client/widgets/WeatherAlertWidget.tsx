@@ -7,10 +7,10 @@ import type { WeatherAlert } from '../../shared/types/weather'
 
 export function WeatherAlertWidget({ siteId }: WidgetProps) {
   const path = siteId ? `/api/weather/alerts?siteId=${siteId}&nx=60&ny=127&address=현장` : null
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<WeatherAlert[]>(path, 7 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<WeatherAlert[]>(path, 7 * 60 * 1000)
 
   return (
-    <WidgetShell title="기상·재난특보" icon={<AlertOctagon size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="기상·재난특보" icon={<AlertOctagon size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data && data.length > 0 ? (
         <ul className="space-y-2">
           {data.map((a) => (

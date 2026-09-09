@@ -34,7 +34,7 @@ export const PUBLIC_API_PROVIDERS: { key: PublicApiProviderKey; label: string; e
   { key: 'g2b', label: '나라장터', envVar: 'G2B_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15129394/openapi.do' },
   { key: 'material_prices', label: '건설시장·주요자재가격(조달청)', envVar: 'MATERIAL_PRICE_SERVICE_KEY / G2B_SERVICE_KEY', docsUrl: 'https://www.data.go.kr/data/15129415/openapi.do' },
   { key: 'law', label: '국가법령정보', envVar: 'LAW_OC', docsUrl: 'https://open.law.go.kr/LSO/usrJoin.do' },
-  { key: 'ecos', label: '환율(한국은행 ECOS)', envVar: 'ECOS_API_KEY', docsUrl: 'https://ecos.bok.or.kr/api/' },
+  { key: 'ecos', label: '한국은행 ECOS (환율·생산자물가지수)', envVar: 'ECOS_API_KEY', docsUrl: 'https://ecos.bok.or.kr/api/' },
   { key: 'naver_maps', label: 'NAVER Cloud Maps 주소 검색', envVar: 'NAVER_MAP_CLIENT_ID / NAVER_MAP_CLIENT_SECRET', docsUrl: 'https://console.ncloud.com/naver-service/application' },
   { key: 'naver_dynamic_map', label: 'NAVER Dynamic Map 교통지도', envVar: 'NAVER_DYNAMIC_MAP_CLIENT_ID', docsUrl: 'https://console.ncloud.com/naver-service/application' },
   { key: 'its', label: '국가교통정보센터(ITS)', envVar: 'ITS_API_KEY', docsUrl: 'https://www.data.go.kr/data/15040463/openapi.do' },

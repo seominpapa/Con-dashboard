@@ -9,6 +9,8 @@ interface UseWidgetDataResult<T> {
   stale: boolean
   isMock: boolean
   updatedAt: string | null
+  /** 자료 기준 시점 (고시일·관측시각 등) */
+  asOf: string | null
   refresh: () => void
 }
 
@@ -25,6 +27,7 @@ export function useWidgetData<T>(path: string | null, refreshInterval = 0): UseW
   const [stale, setStale] = useState(false)
   const [isMock, setIsMock] = useState(false)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  const [asOf, setAsOf] = useState<string | null>(null)
   const hasDataRef = useRef(false)
 
   const load = useCallback(async () => {
@@ -43,6 +46,7 @@ export function useWidgetData<T>(path: string | null, refreshInterval = 0): UseW
       setStale(Boolean(res.stale))
       setIsMock(res.source === 'mock')
       setUpdatedAt(res.updatedAt)
+      setAsOf(res.asOf ?? null)
     } else {
       // 실패했지만 이전에 받아둔 데이터가 있으면 그대로 유지하고 stale 처리
       setError(res.message ?? '데이터를 불러올 수 없습니다')
@@ -57,5 +61,5 @@ export function useWidgetData<T>(path: string | null, refreshInterval = 0): UseW
     return () => clearInterval(timer)
   }, [load, refreshInterval])
 
-  return { data, loading, error: hasDataRef.current ? null : error, stale, isMock, updatedAt, refresh: load }
+  return { data, loading, error: hasDataRef.current ? null : error, stale, isMock, updatedAt, asOf, refresh: load }
 }

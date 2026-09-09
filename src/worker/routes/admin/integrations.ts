@@ -117,7 +117,7 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
         const { EcosExchangeRateProvider } = await import('../../providers/exchange/EcosExchangeRateProvider')
         const p = new EcosExchangeRateProvider(credential.apiKey)
         await p.getRates(['USD'])
-        break
+        return { ok: true, message: 'ECOS 인증키 연결 확인 완료. 환율·생산자물가지수는 같은 인증키를 사용합니다.' }
       }
       case 'naver_maps': {
         const p = new NaverMapsGeocodingProvider(credential.clientId, credential.clientSecret)

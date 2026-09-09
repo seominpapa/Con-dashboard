@@ -12,10 +12,10 @@ const DIR_ICON: Record<TrendDirection, ReactElement> = {
 }
 
 export function ExchangeRateWidget({}: WidgetProps) {
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<ExchangeRateItem[]>('/api/exchange-rates', 45 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<ExchangeRateItem[]>('/api/exchange-rates', 45 * 60 * 1000)
 
   return (
-    <WidgetShell title="환율" icon={<DollarSign size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="환율" icon={<DollarSign size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data && data.length > 0 ? (
         <ul className="space-y-2">
           {data.map((r) => (

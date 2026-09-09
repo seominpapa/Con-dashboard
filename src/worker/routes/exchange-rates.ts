@@ -17,6 +17,7 @@ app.get('/', async (c) => {
     const { value, cached } = await withCache(cacheKey, CACHE_TTL.exchange, () => provider.getRates(codes))
     const envelope = ok(value, provider.source)
     envelope.cached = cached
+    envelope.asOf = value.map((item) => item.asOf ?? '').sort().at(-1) || undefined
     return c.json(envelope)
   } catch (err: any) {
     const stale = cacheGetStale<any>(cacheKey)

@@ -7,6 +7,8 @@ export interface ExchangeRateItem {
   code: string // USD, EUR, JPY, CNY
   pairLabel: string // USD/KRW
   rate: number
+  /** 기준 영업일 YYYY-MM-DD */
+  asOf?: string
   changeValue: number
   changeRate: number
   direction: TrendDirection
@@ -29,6 +31,8 @@ export interface MaterialPriceItem {
   source: string
   updatedAt: string
   isMock: boolean
+  /** 한국은행 ECOS 생산자물가지수(월간). 절대 가격이 아니라 변동 참고 지표다. */
+  producerPriceIndex?: { value: number; changeRate: number; asOf: string }
 }
 
 export interface MarketSummaryIndicator {

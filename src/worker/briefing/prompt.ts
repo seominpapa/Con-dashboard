@@ -70,7 +70,7 @@ export function buildSystemPrompt(): string {
   "informationItems": [{"title": "...", "detail": "...", "sourceWidgets": ["constructionNews"]}]
 }
 
-사용 가능한 sourceWidgets 키: weather, weatherAlert, airQuality, calendar, todo, bidding, constructionNews, law, exchangeRate, materialPrice`
+사용 가능한 sourceWidgets 키: weather, weatherAlert, airQuality, calendar, todo, bidding, constructionNews, law, exchangeRate, marketSummary`
 }
 
 export function buildUserPrompt(context: BriefingContext): string {

@@ -6,10 +6,10 @@ import type { WidgetProps } from '../../shared/types/widget'
 import type { NewsItem } from '../../shared/types/news'
 
 export function ConstructionNewsWidget({}: WidgetProps) {
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<NewsItem[]>('/api/news?limit=6', 20 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<NewsItem[]>('/api/news?limit=6', 20 * 60 * 1000)
 
   return (
-    <WidgetShell title="건설뉴스" icon={<Newspaper size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="건설뉴스" icon={<Newspaper size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data && data.length > 0 ? (
         <ul className="space-y-2">
           {data.map((n) => (

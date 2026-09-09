@@ -8,7 +8,6 @@ import { LawWidget } from './LawWidget'
 import { ScheduleWidget } from './ScheduleWidget'
 import { TodoWidget } from './TodoWidget'
 import { ExchangeRateWidget } from './ExchangeRateWidget'
-import { MaterialPriceWidget } from './MaterialPriceWidget'
 import { MarketSummaryWidget } from './MarketSummaryWidget'
 import { AiBriefingWidget } from './AiBriefingWidget'
 import { NearbyTrafficWidget } from './NearbyTrafficWidget'
@@ -193,29 +192,15 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     supportsManualRefresh: true,
   },
   {
-    id: 'materialPrice',
-    title: '주요자재가격',
-    description: '조달청 기준가격을 우선 사용하고 미연동 시 참고용 Mock 데이터를 표시합니다',
-    category: '경제원가',
-    icon: 'Package',
-    component: MaterialPriceWidget,
-    defaultSize: { w: 1, h: 2 },
-    minSize: { w: 1, h: 1 },
-    maxSize: { w: 2, h: 3 },
-    refreshInterval: 6 * 60 * 60 * 1000,
-    supportsLocation: false,
-    supportsManualRefresh: true,
-  },
-  {
     id: 'marketSummary',
     title: '건설시장 종합',
-    description: '환율·자재가격 핵심 지표를 한 눈에 확인합니다',
+    description: '환율·조달청 기준가격·한국은행 생산자물가지수를 함께 확인합니다',
     category: '경제원가',
     icon: 'LineChart',
     component: MarketSummaryWidget,
-    defaultSize: { w: 1, h: 1 },
+    defaultSize: { w: 2, h: 2 },
     minSize: { w: 1, h: 1 },
-    maxSize: { w: 2, h: 2 },
+    maxSize: { w: 3, h: 3 },
     refreshInterval: 45 * 60 * 1000,
     supportsLocation: false,
     supportsManualRefresh: true,

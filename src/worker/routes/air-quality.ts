@@ -36,8 +36,9 @@ app.get('/', async (c) => {
   try {
     const provider = await getAirQualityProvider(c.env)
     if (provider.source !== 'live') return c.json(ok(await provider.getCurrentAirQuality(site), provider.source))
-    return c.json(await withWidgetSnapshot(c.env.DB, cacheKey, scope, CACHE_TTL.airQuality,
-      2 * 60 * 60 * 1000, () => provider.getCurrentAirQuality(site), isUsableObservation))
+    const envelope = await withWidgetSnapshot(c.env.DB, cacheKey, scope, CACHE_TTL.airQuality,
+      2 * 60 * 60 * 1000, () => provider.getCurrentAirQuality(site), isUsableObservation)
+    return c.json({ ...envelope, asOf: envelope.data ? `${envelope.data.measuredAt.replace(' ', 'T')}:00+09:00` : undefined })
   } catch (err: any) {
     return c.json(fail(`대기질 정보를 불러올 수 없습니다: ${err.message}`, 'live'), 502)
   }

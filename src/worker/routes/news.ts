@@ -30,7 +30,8 @@ app.get('/', async (c) => {
     const provider = await getNewsProvider(c.env)
     const envelope = await withWidgetSnapshot(c.env.DB, `widget:news:${categories.join(',')}`, 'v1', CACHE_TTL.news, 24 * 60 * 60 * 1000,
       () => provider.getNews(categories, 50), usableNews)
-    return c.json({ ...envelope, data: envelope.data?.slice(0, limit) ?? null })
+    const data = envelope.data?.slice(0, limit) ?? null
+    return c.json({ ...envelope, data, asOf: data?.map((entry) => entry.publishedAt).sort().at(-1) })
   } catch (error) {
     const message = error instanceof NewsSourcesUnavailableError ? error.message : '뉴스를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.'
     return c.json(fail(message, 'live'), 502)

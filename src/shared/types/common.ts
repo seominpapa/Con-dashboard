@@ -22,6 +22,8 @@ export interface ApiEnvelope<T> {
   cached?: boolean
   /** 만료된 마지막 정상 데이터를 표시하는지 여부 */
   stale?: boolean
+  /** 자료 자체의 기준 시점 (고시일·관측시각·발표시각 등, ISO 또는 YYYY-MM-DD). 조회 시각(updatedAt)과 구분한다. */
+  asOf?: string
 }
 
 export function ok<T>(data: T, source: DataSource, message?: string): ApiEnvelope<T> {

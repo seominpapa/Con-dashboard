@@ -19,7 +19,7 @@ export function MaterialPriceWidget({ settings, onSettingsChange }: WidgetProps)
     : []
   const materialKeys = configured.length ? configured.slice(0, 6) : MATERIAL_CATALOG.slice(0, 6).map((item) => item.key)
   const path = `/api/material-prices?keys=${encodeURIComponent(materialKeys.join(','))}`
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<MaterialPriceItem[]>(path, 6 * 60 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<MaterialPriceItem[]>(path, 6 * 60 * 60 * 1000)
 
   const toggleMaterial = (key: string) => {
     const next = materialKeys.includes(key) ? materialKeys.filter((item) => item !== key) : [...materialKeys, key].slice(0, 6)
@@ -27,7 +27,7 @@ export function MaterialPriceWidget({ settings, onSettingsChange }: WidgetProps)
   }
 
   return (
-    <WidgetShell title="주요자재가격" icon={<Package size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="주요자재가격" icon={<Package size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data && data.length > 0 ? (
         <div className="space-y-2">
           <ul className="space-y-2">

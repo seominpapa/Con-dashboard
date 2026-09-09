@@ -21,11 +21,11 @@ const STATUS_VISUAL: Record<TrafficStatus, string> = {
 
 export function NearbyTrafficWidget({ siteId }: WidgetProps) {
   const path = siteId ? `/api/traffic?siteId=${encodeURIComponent(siteId)}` : null
-  const { data, loading, error, stale, updatedAt, refresh } = useWidgetData<NearbyTrafficSnapshot>(path, 5 * 60 * 1000)
+  const { data, loading, error, stale, updatedAt, asOf, refresh } = useWidgetData<NearbyTrafficSnapshot>(path, 5 * 60 * 1000)
   const congestedRoads = data?.roads.filter((road) => road.status === '정체') ?? []
 
   return (
-    <WidgetShell title="인근 주요도로" icon={<CarFront size={16} />} loading={loading} error={error} stale={stale} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="인근 주요도로" icon={<CarFront size={16} />} loading={loading} error={error} stale={stale} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data ? (
         <div className="space-y-3 text-xs">
           <div className="space-y-1.5">

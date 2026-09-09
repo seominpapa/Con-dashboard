@@ -10,10 +10,10 @@ function daysLeft(deadline: string): number {
 }
 
 export function BiddingWidget({ instanceId }: WidgetProps) {
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<BidNotice[]>('/api/bids?limit=6', 45 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<BidNotice[]>('/api/bids?limit=6', 45 * 60 * 1000)
 
   return (
-    <WidgetShell title="관심입찰" icon={<Gavel size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh} detailPath="/bids">
+    <WidgetShell title="관심입찰" icon={<Gavel size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh} detailPath="/bids">
       {data && data.length > 0 ? (
         <ul className="space-y-2">
           {data.map((b) => {

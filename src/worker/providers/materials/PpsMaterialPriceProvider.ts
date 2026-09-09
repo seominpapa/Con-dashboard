@@ -76,6 +76,16 @@ function priceOf(item: any): number {
 
 const compact = (value: unknown) => String(value ?? '').replace(/\s+/g, '').toLowerCase()
 
+/** 대시보드 자재로 대응되는 조달청 품목만 추린 가격표. 위젯·브리핑이 공유하고 D1 스냅샷으로 보존한다. */
+export interface PpsPriceRow {
+  cls: string
+  unit: string
+  spec: string
+  price: number
+  /** 고시일 YYYY-MM-DD */
+  date: string
+}
+
 export class PpsMaterialPriceProvider implements MaterialPriceProvider {
   readonly source = 'live' as const
   private serviceKey: string
@@ -137,31 +147,39 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
     return items.length ? '조달청 가격정보 API 연결 확인 완료' : '조달청 가격정보 API 연결 확인 완료 · 조회 결과 없음 (선택 기간 내 자료 없음)'
   }
 
+  async getPriceTable(): Promise<PpsPriceRow[]> {
+    const wanted = new Set(MATERIAL_CATALOG.flatMap((entry) => entry.pps ? [compact(entry.pps.cls)] : []))
+    return (await this.fetchItems()).flatMap((item) => {
+      const cls = compact(item?.prdctClsfcNoNm)
+      const price = priceOf(item)
+      if (!wanted.has(cls) || !price) return []
+      return [{ cls, unit: compact(item?.unit), spec: String(item?.krnPrdctNm ?? '').trim(), price, date: String(item?.nticeDt ?? '').slice(0, 10) || todayKeySeoul() }]
+    })
+  }
+
   /** 조달청이 제공하는 자재만 돌려준다. 미제공 자재는 라우트가 Mock으로 채운다. */
-  async getPrices(materialKeys: string[]): Promise<MaterialPriceItem[]> {
-    const items = await this.fetchItems()
+  async getPrices(materialKeys: string[], table?: PpsPriceRow[]): Promise<MaterialPriceItem[]> {
+    const rows = table ?? await this.getPriceTable()
     return materialKeys.flatMap((materialKey) => {
       const catalog = MATERIAL_CATALOG.find((entry) => entry.key === materialKey)
       if (!catalog?.pps) return []
       const { cls, unit } = catalog.pps
       // 같은 품목이라도 규격별 가격이 다르므로 가격 중앙값 규격을 대표로 보여준다.
-      const candidates = items
-        .filter((candidate) => compact(candidate?.prdctClsfcNoNm) === compact(cls) && compact(candidate?.unit) === compact(unit) && priceOf(candidate) > 0)
-        .sort((a, b) => priceOf(a) - priceOf(b))
-      const item = candidates[Math.floor(candidates.length / 2)]
-      if (!item) return []
+      const candidates = rows.filter((row) => row.cls === compact(cls) && row.unit === compact(unit)).sort((a, b) => a.price - b.price)
+      const row = candidates[Math.floor(candidates.length / 2)]
+      if (!row) return []
       return [{
         materialKey,
         label: catalog.label,
-        spec: String(item.krnPrdctNm ?? '').trim() || undefined,
-        price: priceOf(item),
+        spec: row.spec || undefined,
+        price: row.price,
         unit: catalog.unit,
         currency: 'KRW',
         changeRate: 0,
         direction: 'flat' as const,
         hasTrend: false,
         source: '조달청 나라장터 가격정보현황서비스',
-        updatedAt: String(item.nticeDt ?? '').slice(0, 10) || todayKeySeoul(),
+        updatedAt: row.date,
         isMock: false,
       }]
     })

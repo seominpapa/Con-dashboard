@@ -12,10 +12,10 @@ interface WeatherResponse {
 
 export function WeatherWidget({ siteId }: WidgetProps) {
   const path = siteId ? `/api/weather?siteId=${siteId}&nx=60&ny=127&siteName=현장` : null
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<WeatherResponse>(path, 15 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<WeatherResponse>(path, 15 * 60 * 1000)
 
   return (
-    <WidgetShell title="건설날씨" icon={<CloudSun size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="건설날씨" icon={<CloudSun size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data ? (
         <div className="space-y-3">
           <div className="flex items-baseline justify-between">

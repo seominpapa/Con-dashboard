@@ -27,10 +27,11 @@ app.get('/', async (c) => {
     const { value, cached } = await withCache(cacheKey, CACHE_TTL.traffic, () => provider.getNearbyTraffic(site))
     const envelope = ok(value, provider.source)
     envelope.cached = cached
+    envelope.asOf = value.observedAt
     return c.json(envelope)
   } catch (error: any) {
     if (stale && canUseStaleTraffic(stale.value)) {
-      return c.json({ ...ok(stale.value, 'live', '갱신에 실패해 이전 교통정보를 표시합니다'), cached: true, stale: true })
+      return c.json({ ...ok(stale.value, 'live', '갱신에 실패해 이전 교통정보를 표시합니다'), cached: true, stale: true, asOf: stale.value.observedAt })
     }
     return c.json(fail(`교통정보를 불러올 수 없습니다: ${error?.message ?? '알 수 없는 오류'}`, 'live'), 502)
   }

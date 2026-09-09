@@ -28,6 +28,7 @@ app.get('/', async (c) => {
     const risk = evaluateConstructionWeatherRisk(weather)
     const envelope = ok({ weather, risk: { items: risk, disclaimer: WEATHER_RISK_DISCLAIMER } }, provider.source)
     envelope.cached = cached
+    envelope.asOf = weather.observedAt
     return c.json(envelope)
   } catch (err: any) {
     const stale = cacheGetStale<any>(cacheKey)
@@ -39,6 +40,7 @@ app.get('/', async (c) => {
         updatedAt: new Date().toISOString(),
         source: 'live',
         cached: true,
+        asOf: stale.value.observedAt,
         message: `이전 데이터를 표시합니다 (갱신 실패: ${err.message})`,
       })
     }
@@ -57,6 +59,7 @@ app.get('/alerts', async (c) => {
     const { value: alerts, cached } = await withCache(cacheKey, CACHE_TTL.weatherAlert, () => provider.getAlerts(site))
     const envelope = ok(alerts, provider.source)
     envelope.cached = cached
+    envelope.asOf = alerts[0]?.announcedAt
     return c.json(envelope)
   } catch (err: any) {
     const stale = cacheGetStale<any>(cacheKey)
@@ -67,6 +70,7 @@ app.get('/alerts', async (c) => {
         updatedAt: new Date().toISOString(),
         source: 'live',
         cached: true,
+        asOf: stale.value[0]?.announcedAt,
         message: `이전 데이터를 표시합니다 (갱신 실패: ${err.message})`,
       })
     }

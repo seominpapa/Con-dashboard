@@ -15,10 +15,10 @@ const GRADE_TONE: Record<AirQualityGrade, 'normal' | 'caution' | 'danger'> = {
 
 export function AirQualityWidget({ siteId }: WidgetProps) {
   const path = siteId ? `/api/air-quality?siteId=${siteId}&siteName=현장` : null
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<AirQualityNow>(path, 30 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<AirQualityNow>(path, 30 * 60 * 1000)
 
   return (
-    <WidgetShell title="대기질" icon={<Wind size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="대기질" icon={<Wind size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data ? (
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="col-span-2 space-y-0.5 text-slate-500">

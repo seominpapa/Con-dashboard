@@ -139,11 +139,12 @@ export class KmaWeatherProvider implements WeatherProvider {
     const tmnItem = items.find((i) => i.category === 'TMN')
     const tmxItem = items.find((i) => i.category === 'TMX')
     const skyInfo = skyCodeToCondition(first.SKY ?? '1')
+    const { baseDate, baseTime } = getBaseDateTime()
 
     return {
       siteId: site.id,
       siteName: site.name,
-      observedAt: new Date().toISOString(),
+      observedAt: `${baseDate.slice(0, 4)}-${baseDate.slice(4, 6)}-${baseDate.slice(6, 8)}T${baseTime.slice(0, 2)}:${baseTime.slice(2, 4)}:00+09:00`,
       temperature: Number(first.TMP ?? 0),
       minTemperature: tmnItem ? Number(tmnItem.fcstValue) : Number(first.TMP ?? 0) - 5,
       maxTemperature: tmxItem ? Number(tmxItem.fcstValue) : Number(first.TMP ?? 0) + 5,
@@ -193,12 +194,18 @@ export class KmaWeatherProvider implements WeatherProvider {
         id: `kma-alert-${idx}-${item.tmFc ?? ''}`,
         kind: (item.warnVar ?? item.title ?? '호우').replace(/(주의보|경보)/, '').trim(),
         level: (item.title ?? '').includes('경보') ? '경보' : '주의보',
-        announcedAt: item.tmFc ?? new Date().toISOString(),
+        announcedAt: kmaTimeToIso(item.tmFc),
         effectiveAt: item.tmEf ?? item.tmFc ?? new Date().toISOString(),
         region: item.areaName ?? site.address,
         title: item.title ?? '기상특보',
       }))
   }
+}
+
+/** '202609091510' → 2026-09-09T15:10:00+09:00 */
+function kmaTimeToIso(value: unknown): string {
+  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(String(value ?? ''))
+  return match ? `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:00+09:00` : new Date().toISOString()
 }
 
 function degToDirection(deg: number): string {

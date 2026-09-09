@@ -209,7 +209,7 @@ export async function buildBriefingContext(
     )
   }
 
-  if (has('materialPrice')) {
+  if (has('materialPrice') || has('marketSummary')) {
     tasks.push(
       (async () => {
         try {
@@ -217,7 +217,7 @@ export async function buildBriefingContext(
           const allowedKeys = new Set(MATERIAL_CATALOG.map((material) => material.key))
           const keys = selectedWidgetStrings(
             activeWidgets,
-            'materialPrice',
+            has('marketSummary') ? 'marketSummary' : 'materialPrice',
             'materialKeys',
             MATERIAL_CATALOG.slice(0, 4).map((material) => material.key),
             MATERIAL_CATALOG.length,

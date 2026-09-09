@@ -14,7 +14,7 @@ export function LawWidget({ settings, onSettingsChange }: WidgetProps) {
     ? configured as string[]
     : [...RECOMMENDED_LAWS]
   const path = `/api/laws?names=${encodeURIComponent(lawNames.join(','))}`
-  const { data, loading, error, stale, isMock, updatedAt, refresh } = useWidgetData<LawItem[]>(path, 12 * 60 * 60 * 1000)
+  const { data, loading, error, stale, isMock, updatedAt, asOf, refresh } = useWidgetData<LawItem[]>(path, 12 * 60 * 60 * 1000)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<LawItem[]>([])
   const [searching, setSearching] = useState(false)
@@ -48,7 +48,7 @@ export function LawWidget({ settings, onSettingsChange }: WidgetProps) {
   }
 
   return (
-    <WidgetShell title="법령·제도" icon={<Scale size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} onRefresh={refresh}>
+    <WidgetShell title="법령·제도" icon={<Scale size={16} />} loading={loading} error={error} stale={stale} mockBadge={isMock} updatedAt={updatedAt} asOf={asOf} onRefresh={refresh}>
       {data && data.length > 0 ? (
         <ul className="space-y-2">
           {data.map((l) => (

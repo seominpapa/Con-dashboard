@@ -47,11 +47,12 @@ app.get('/', async (c) => {
     const { value, cached } = await withCache(cacheKey, CACHE_TTL.law, () => provider.getLaws(names))
     const envelope = ok(value, provider.source)
     envelope.cached = cached
+    envelope.asOf = value.map((law) => law.lastAmendedDate).sort().at(-1)
     return c.json(envelope)
   } catch (err: any) {
     const stale = cacheGetStale<any>(cacheKey)
     if (stale) {
-      return c.json({ status: 'success', data: stale.value, updatedAt: new Date().toISOString(), source: 'live', cached: true, message: `이전 데이터를 표시합니다 (갱신 실패: ${err.message})` })
+      return c.json({ status: 'success', data: stale.value, updatedAt: new Date().toISOString(), source: 'live', cached: true, asOf: stale.value.map((law: any) => law.lastAmendedDate).sort().at(-1), message: `이전 데이터를 표시합니다 (갱신 실패: ${err.message})` })
     }
     return c.json(fail(`법령 정보를 불러올 수 없습니다: ${err.message}`, 'live'), 502)
   }

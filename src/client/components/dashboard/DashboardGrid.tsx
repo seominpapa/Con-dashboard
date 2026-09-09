@@ -10,6 +10,7 @@ import { getWidgetDefinition } from '../../widgets/registry'
 import {
   dashboardRepository,
   createDefaultConfig,
+  migrateMaterialPriceWidget,
   syncDashboardConfigToServer,
   type DashboardConfig,
   type DashboardWidgetInstance,
@@ -43,7 +44,7 @@ export function DashboardGrid() {
   const { activeSiteId, sites, loading: sitesLoading } = useSites()
 
   useEffect(() => {
-    const loaded = dashboardRepository.load() ?? createDefaultConfig()
+    const loaded = migrateMaterialPriceWidget(dashboardRepository.load() ?? createDefaultConfig())
     dashboardRepository.save(loaded)
     setConfig(loaded)
     syncDashboardConfigToServer(loaded)
