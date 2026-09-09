@@ -5,6 +5,11 @@ import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredential
 import type { MaterialPriceProvider } from './MaterialPriceProvider'
 
 const ENDPOINT = 'https://apis.data.go.kr/1230000/ao/PriceInfoService/getPriceInfoListFcltyCmmnMtrilTotal'
+// 기준가격은 분기·반기 단위로 일괄 등록되므로 오늘만 조회하면 0건이다. API는 약 6개월 초과 범위를 거부한다(코드 07).
+const LOOKBACK_DAYS = 180
+// numOfRows 최대 999. 1000 이상을 보내면 기본값 10건만 돌아온다.
+const PAGE_SIZE = 999
+const MAX_PAGES = 10
 export class PpsApiError extends Error {}
 
 const ERROR_GUIDANCE: Record<string, string> = {
@@ -53,22 +58,8 @@ function responseStructure(json: unknown): string {
   })
   return [`root=${kind(json)}`, ...fields].join(', ')
 }
-const KEYWORDS: Record<string, string[]> = {
-  rebar: ['철근', '이형봉강'],
-  'h-beam': ['H형강', '에이치형강'],
-  'steel-plate': ['후판'],
-  copper: ['동관', '동판', '구리'],
-  aluminum: ['알루미늄'],
-  cement: ['시멘트'],
-  remicon: ['레미콘', 'ready mixed concrete'],
-  asphalt: ['아스팔트'],
-  aggregate: ['골재'],
-  lumber: ['목재', '제재목'],
-  nickel: ['니켈'],
-}
-
 function responseEnvelope(json: any): any {
-  return json?.response ?? json
+  return json?.response ?? json?.['nkoneps.com.response.ResponseError'] ?? json
 }
 
 function asItems(envelope: any): any[] {
@@ -78,13 +69,12 @@ function asItems(envelope: any): any[] {
   return items?.item ? [items.item] : []
 }
 
-function numberFrom(item: any): number {
-  for (const key of ['unitPrce', 'unitPrc', 'prce', 'price', 'cntrctPrce', 'stdAmt']) {
-    const value = Number(String(item?.[key] ?? '').replaceAll(',', ''))
-    if (Number.isFinite(value) && value > 0) return value
-  }
-  return 0
+function priceOf(item: any): number {
+  const value = Number(String(item?.prce ?? '').replaceAll(',', ''))
+  return Number.isFinite(value) && value > 0 ? value : 0
 }
+
+const compact = (value: unknown) => String(value ?? '').replace(/\s+/g, '').toLowerCase()
 
 export class PpsMaterialPriceProvider implements MaterialPriceProvider {
   readonly source = 'live' as const
@@ -94,15 +84,17 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
     this.serviceKey = normalizeDataGoKrServiceKey(serviceKey)
   }
 
-  private async fetchItems(numOfRows = 1000): Promise<any[]> {
-    const today = todayKeySeoul().replaceAll('-', '')
+  private async fetchPage(numOfRows: number, pageNo: number): Promise<any[]> {
+    const today = todayKeySeoul()
+    const begin = new Date(`${today}T00:00:00Z`) // 날짜 키 산술용 (KST 날짜 기준)
+    begin.setUTCDate(begin.getUTCDate() - LOOKBACK_DAYS)
     const url = new URL(ENDPOINT)
     url.searchParams.set('serviceKey', this.serviceKey)
     url.searchParams.set('numOfRows', String(numOfRows))
-    url.searchParams.set('pageNo', '1')
+    url.searchParams.set('pageNo', String(pageNo))
     url.searchParams.set('inqryDiv', '1')
-    url.searchParams.set('inqryBgnDate', today)
-    url.searchParams.set('inqryEndDate', today)
+    url.searchParams.set('inqryBgnDate', begin.toISOString().slice(0, 10).replaceAll('-', ''))
+    url.searchParams.set('inqryEndDate', today.replaceAll('-', ''))
     url.searchParams.set('type', 'json')
 
     let response: Response
@@ -130,36 +122,48 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
     return asItems(envelope)
   }
 
+  private async fetchItems(): Promise<any[]> {
+    let items: any[] = []
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const batch = await this.fetchPage(PAGE_SIZE, page)
+      items = [...items, ...batch]
+      if (batch.length < PAGE_SIZE) break
+    }
+    return items
+  }
+
   async healthCheck(): Promise<string> {
-    const items = await this.fetchItems(1)
+    const items = await this.fetchPage(1, 1)
     return items.length ? '조달청 가격정보 API 연결 확인 완료' : '조달청 가격정보 API 연결 확인 완료 · 조회 결과 없음 (선택 기간 내 자료 없음)'
   }
 
+  /** 조달청이 제공하는 자재만 돌려준다. 미제공 자재는 라우트가 Mock으로 채운다. */
   async getPrices(materialKeys: string[]): Promise<MaterialPriceItem[]> {
     const items = await this.fetchItems()
-    const result = materialKeys.flatMap((materialKey) => {
+    return materialKeys.flatMap((materialKey) => {
       const catalog = MATERIAL_CATALOG.find((entry) => entry.key === materialKey)
-      const keywords = KEYWORDS[materialKey]
-      if (!catalog || !keywords) return []
-      const item = items.find((candidate) => keywords.some((keyword) => JSON.stringify(candidate).toLowerCase().includes(keyword.toLowerCase())))
-      const price = numberFrom(item)
-      if (!item || !price) return []
-      const updatedAt = item.nticeDt ?? item.stdrDt ?? item.priceBasisDate ?? item.dataCrtrYmd ?? new Date().toISOString()
+      if (!catalog?.pps) return []
+      const { cls, unit } = catalog.pps
+      // 같은 품목이라도 규격별 가격이 다르므로 가격 중앙값 규격을 대표로 보여준다.
+      const candidates = items
+        .filter((candidate) => compact(candidate?.prdctClsfcNoNm) === compact(cls) && compact(candidate?.unit) === compact(unit) && priceOf(candidate) > 0)
+        .sort((a, b) => priceOf(a) - priceOf(b))
+      const item = candidates[Math.floor(candidates.length / 2)]
+      if (!item) return []
       return [{
         materialKey,
         label: catalog.label,
-        price,
-        unit: item.unit ?? item.unitNm ?? item.cntrctUnit ?? catalog.unit,
+        spec: String(item.krnPrdctNm ?? '').trim() || undefined,
+        price: priceOf(item),
+        unit: catalog.unit,
         currency: 'KRW',
         changeRate: 0,
         direction: 'flat' as const,
         hasTrend: false,
         source: '조달청 나라장터 가격정보현황서비스',
-        updatedAt,
+        updatedAt: String(item.nticeDt ?? '').slice(0, 10) || todayKeySeoul(),
         isMock: false,
       }]
     })
-    if (result.length !== materialKeys.length) throw new Error('PPS API 응답에 선택한 자재 가격이 없습니다')
-    return result
   }
 }

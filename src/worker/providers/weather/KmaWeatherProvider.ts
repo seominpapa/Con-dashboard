@@ -184,8 +184,11 @@ export class KmaWeatherProvider implements WeatherProvider {
     const items = json?.response?.body?.items?.item ?? []
     const regionKeyword = site.address.split(' ').slice(0, 1)[0] // 시/도 단위로 필터
 
-    return items
+    // 통보문은 발표·변경·해제가 모두 누적되므로 가장 최근 발표(tmFc) 1건만 현재 상태로 보여준다.
+    return [...items]
       .filter((item: any) => !regionKeyword || !item.areaName || String(item.areaName).includes(regionKeyword))
+      .sort((a: any, b: any) => String(b.tmFc ?? '').localeCompare(String(a.tmFc ?? '')))
+      .slice(0, 1)
       .map((item: any, idx: number) => ({
         id: `kma-alert-${idx}-${item.tmFc ?? ''}`,
         kind: (item.warnVar ?? item.title ?? '호우').replace(/(주의보|경보)/, '').trim(),

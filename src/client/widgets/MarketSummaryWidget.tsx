@@ -38,7 +38,7 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
   const configured = Array.isArray(settings.materialKeys)
     ? settings.materialKeys.filter((key): key is string => typeof key === 'string' && MATERIAL_CATALOG.some((item) => item.key === key))
     : []
-  const materialKeys = configured.length ? configured.slice(0, 3) : ['rebar', 'cement']
+  const materialKeys = configured.length ? configured.slice(0, 3) : ['steel-plate', 'light-steel']
   const materialQuery = materialKeys.join(',')
 
   const load = useCallback(async () => {
@@ -67,7 +67,7 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
     hasDataRef.current = true
     setError(null)
     setStale(false)
-    setIsMock([ex.source, mat.source].includes('mock'))
+    setIsMock([ex.source, mat.source].includes('mock') || (mat.data ?? []).some((material) => material.isMock))
     setUpdatedAt(new Date().toISOString())
   }, [materialQuery])
 

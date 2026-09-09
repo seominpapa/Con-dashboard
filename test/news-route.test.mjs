@@ -10,6 +10,15 @@ const articles = [
   { title: '철도 노선 건설 계획', domain: 'news.example.test', seendate: '20260909T010000Z', url: 'https://news.example.test/rail' },
 ]
 
+// Google 뉴스 RSS 응답을 흉내낸다. 첫 번째(건설 정책) 피드만 기사를 주고 나머지는 빈 채널을 준다.
+const pubDate = (seendate) => new Date(seendate.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/, '$1-$2-$3T$4:$5:$6Z')).toUTCString()
+const gnews = (list, input) => {
+  const url = new URL(String(input))
+  if (url.hostname !== 'news.google.com') return new Response('', { status: 503 })
+  const items = (url.searchParams.get('q') ?? '').includes('건설 정책') ? list : []
+  return new Response(`<?xml version="1.0"?><rss version="2.0"><channel>${items.map((a) => `<item><title>${a.title} - ${a.domain}</title><link>${a.url}</link><pubDate>${pubDate(a.seendate)}</pubDate><source url="https://${a.domain}">${a.domain}</source></item>`).join('')}</channel></rss>`)
+}
+
 async function setup(t) {
   const sqlite = new DatabaseSync(':memory:')
   const dir = new URL('../migrations/', import.meta.url)
@@ -42,9 +51,7 @@ test('news survives a fresh Worker, shares one snapshot across limits, and retai
   let calls = 0
   t.mock.method(globalThis, 'fetch', async (input) => {
     calls++
-    return mode !== 'fail' && new URL(String(input)).hostname === 'api.gdeltproject.org'
-      ? Response.json({ articles: mode === 'empty' ? [] : articles })
-      : new Response('', { status: 503 })
+    return mode !== 'fail' ? gnews(mode === 'empty' ? [] : articles, input) : new Response('', { status: 503 })
   })
   const firstWorker = await newWorker()
   const original = await (await firstWorker('?limit=1')).json()
@@ -82,9 +89,7 @@ test('category queries keep a matching article beyond the first 50 general artic
   let fail = false
   t.mock.method(globalThis, 'fetch', async (input) => {
     calls++
-    return !fail && new URL(String(input)).hostname === 'api.gdeltproject.org'
-      ? Response.json({ articles: [...generalArticles, rareArticle] })
-      : new Response('', { status: 503 })
+    return !fail ? gnews([...generalArticles, rareArticle], input) : new Response('', { status: 503 })
   })
   const request = await newWorker()
   const general = await (await request('?limit=50')).json()
@@ -114,9 +119,7 @@ test('news rejects unsupported category and invalid limits before calling provid
 test('news with no prior snapshot reports genuine empty results without persisting emptiness', async (t) => {
   const { newWorker } = await setup(t)
   let empty = true
-  t.mock.method(globalThis, 'fetch', async (input) => new URL(String(input)).hostname === 'api.gdeltproject.org'
-    ? Response.json({ articles: empty ? [] : articles })
-    : new Response('', { status: 503 }))
+  t.mock.method(globalThis, 'fetch', async (input) => gnews(empty ? [] : articles, input))
   const request = await newWorker()
   const noNews = await request('?limit=6')
   assert.equal(noNews.status, 200)
@@ -134,7 +137,7 @@ test('news route exposes safe source failure diagnostics without raw upstream de
   const response = await request('?limit=6')
   assert.equal(response.status, 502)
   const result = await response.json()
-  assert.match(result.message, /GDELT=NETWORK/)
-  assert.match(result.message, /MOEL_POLICY=NETWORK/)
+  assert.match(result.message, /POLICY=NETWORK/)
+  assert.match(result.message, /TECH=NETWORK/)
   assert.ok(!JSON.stringify(result).includes(privateDetail))
 })

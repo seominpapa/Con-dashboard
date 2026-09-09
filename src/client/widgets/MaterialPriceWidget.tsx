@@ -32,8 +32,12 @@ export function MaterialPriceWidget({ settings, onSettingsChange }: WidgetProps)
         <div className="space-y-2">
           <ul className="space-y-2">
             {data.map((m) => (
-              <li key={m.materialKey} className="flex items-center justify-between text-xs">
-                <span className="font-medium text-slate-600">{m.label}</span>
+              <li key={m.materialKey} className="flex items-center justify-between gap-2 text-xs">
+                <span className="min-w-0">
+                  <span className="font-medium text-slate-600">{m.label}</span>
+                  {m.isMock && !isMock && <span className="ml-1 rounded bg-amber-50 px-1 text-[9px] font-medium text-amber-600">Mock</span>}
+                  {m.spec && <span className="block truncate text-[10px] text-slate-400" title={m.spec}>{m.spec}</span>}
+                </span>
                 <div className="flex items-center gap-1">
                   <span className="tabular-nums font-semibold text-slate-800">
                     {m.price.toLocaleString('ko-KR')} <span className="text-[10px] text-slate-400">{m.unit}</span>
@@ -49,15 +53,17 @@ export function MaterialPriceWidget({ settings, onSettingsChange }: WidgetProps)
             ))}
           </ul>
           <p className={`rounded px-2 py-1 text-[10px] ${isMock ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
-            {isMock ? 'ⓘ 조달청 서비스 미승인 또는 조회 실패로 참고용 Mock 데이터입니다.' : 'ⓘ 조달청 공공 기준가격이며 실시간 시세·변동률이 아닙니다.'}
+            {isMock ? 'ⓘ 조달청 서비스 미승인 또는 조회 실패로 참고용 Mock 데이터입니다.'
+              : data.some((m) => m.isMock) ? 'ⓘ 조달청 공공 기준가격(대표 규격)이며 시세·변동률이 아닙니다. Mock 표시 자재는 조달청이 제공하지 않는 항목입니다.'
+              : 'ⓘ 조달청 공공 기준가격(대표 규격)이며 실시간 시세·변동률이 아닙니다.'}
           </p>
           <details className="text-[11px] text-slate-500">
             <summary className="cursor-pointer font-medium">표시 자재 선택 (최대 6개)</summary>
             <div className="mt-1 grid grid-cols-2 gap-1">
               {MATERIAL_CATALOG.map((item) => (
-                <label key={item.key} className="flex items-center gap-1">
+                <label key={item.key} className="flex items-center gap-1" title={item.pps ? '조달청 기준가격 제공' : '조달청 미제공 (참고용 Mock)'}>
                   <input type="checkbox" checked={materialKeys.includes(item.key)} onChange={() => toggleMaterial(item.key)} />
-                  {item.label}
+                  {item.label}{!item.pps && <span className="text-[9px] text-amber-600">Mock</span>}
                 </label>
               ))}
             </div>

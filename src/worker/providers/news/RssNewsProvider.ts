@@ -1,22 +1,24 @@
 import type { NewsProvider } from './NewsProvider'
 import type { NewsItem, NewsCategory } from '../../../shared/types/news'
 
-interface RssFeedConfig {
-  url: string
-  source: string
+interface NewsFeed {
+  id: string
+  query: string
   category: NewsCategory
 }
 
-const GDELT_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
-const GDELT_QUERY = '(construction OR infrastructure OR "industrial accident" OR "real estate") sourcelang:korean'
-
-const FEEDS: RssFeedConfig[] = [
-  { url: 'https://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=NEWS', source: '국토교통부', category: '건설정책' },
-  { url: 'https://www.molit.go.kr/dev/board/board_rss.jsp?rss_id=N01_B', source: '국토교통부', category: '건설정책' },
-  { url: 'https://www.moel.go.kr/rss/policy.do', source: '고용노동부', category: '건설안전' },
-  { url: 'https://www.moel.go.kr/rss/notice.do', source: '고용노동부', category: '건설안전' },
-  { url: 'https://www.moel.go.kr/rss/lawinfo.do', source: '고용노동부', category: '건설정책' },
+// 정부 RSS·GDELT는 Cloudflare에서 차단·시간초과되어 Google 뉴스 RSS 검색으로 대체한다.
+const FEEDS: NewsFeed[] = [
+  { id: 'POLICY', query: '건설 정책 OR 국토교통부 건설 OR 건설산업', category: '건설정책' },
+  { id: 'SAFETY', query: '건설현장 사고 OR 건설 중대재해 OR 건설현장 안전', category: '건설안전' },
+  { id: 'ORDER', query: '건설사 수주 OR 건설 입찰 OR 시공사 선정', category: '수주' },
+  { id: 'ESTATE', query: '아파트 분양 OR 주택 공급 OR 부동산 시장', category: '부동산' },
+  { id: 'TECH', query: '스마트건설 OR 건설 AI OR 해외건설 수주 OR SOC 사업', category: '스마트건설' },
 ]
+
+function feedUrl(feed: NewsFeed): string {
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(`${feed.query} when:7d`)}&hl=ko&gl=KR&ceid=KR:ko`
+}
 
 type NewsFailureCode = `HTTP_${number}` | 'TIMEOUT' | 'FORMAT' | 'NETWORK'
   | 'FORMAT_EMPTY' | 'FORMAT_HTML' | 'FORMAT_RSS' | 'FORMAT_OTHER'
@@ -27,16 +29,15 @@ class NewsSourceFailure extends Error {
 
 export class NewsSourcesUnavailableError extends Error {
   constructor(results: PromiseSettledResult<NewsItem[]>[]) {
-    const ids = ['GDELT', 'MOLIT_NEWS', 'MOLIT_N01_B', 'MOEL_POLICY', 'MOEL_NOTICE', 'MOEL_LAWINFO']
-    const details = ids.map((id, index) => {
+    const details = FEEDS.map((feed, index) => {
       const result = results[index]
       const error = result?.status === 'rejected' ? result.reason : undefined
       const code = error instanceof NewsSourceFailure ? error.code
         : error instanceof Error && error.name === 'TimeoutError' ? 'TIMEOUT'
         : error instanceof SyntaxError ? 'FORMAT' : 'NETWORK'
-      return `${id}=${code}`
+      return `${feed.id}=${code}`
     }).join(', ')
-    super(`무료 뉴스 소스 조회에 실패했습니다 [${details}]`)
+    super(`뉴스 소스 조회에 실패했습니다 [${details}]`)
     this.name = 'NewsSourcesUnavailableError'
   }
 }
@@ -73,10 +74,7 @@ function decodeEntities(text: string): string {
 }
 
 function toIsoDate(value: string): string {
-  const gdelt = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/)
-  if (gdelt) return `${gdelt[1]}-${gdelt[2]}-${gdelt[3]}T${gdelt[4]}:${gdelt[5]}:${gdelt[6]}.000Z`
-  const moel = value.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})$/)
-  const date = new Date(moel ? `${moel[1]}T${moel[2]}+09:00` : value)
+  const date = new Date(value)
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
 }
 
@@ -97,7 +95,7 @@ function safeArticleUrl(value: string): string | null {
   }
 }
 
-function parseRssItems(xml: string, source: string, fallbackCategory: NewsCategory): NewsItem[] {
+export function parseRssItems(xml: string, fallbackCategory: NewsCategory): NewsItem[] {
   if (!/<rss\b[^>]*>[\s\S]*<channel\b[^>]*>[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(xml)) {
     const code = !xml.trim() ? 'FORMAT_EMPTY'
       : /<!doctype\s+html\b|<html\b/i.test(xml) ? 'FORMAT_HTML'
@@ -105,44 +103,14 @@ function parseRssItems(xml: string, source: string, fallbackCategory: NewsCatego
     throw new NewsSourceFailure(code)
   }
   return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].flatMap((match) => {
-    const title = decodeEntities(extractTag(match[1], 'title'))
+    const source = decodeEntities(extractTag(match[1], 'source')) || 'Google 뉴스'
+    // Google 뉴스 제목은 " - 매체명"으로 끝난다.
+    const rawTitle = decodeEntities(extractTag(match[1], 'title'))
+    const title = (rawTitle.endsWith(` - ${source}`) ? rawTitle.slice(0, -source.length - 3) : rawTitle).trim()
     const url = safeArticleUrl(extractTag(match[1], 'link'))
     if (!title || !url) return []
-    const publishedAt = toIsoDate(extractTag(match[1], 'dc:date') || extractTag(match[1], 'pubDate'))
-    return [item({
-      title,
-      source,
-      publishedAt,
-      category: categoryFor(title, fallbackCategory),
-      url,
-    })]
-  })
-}
-
-interface GdeltArticle {
-  title?: unknown
-  domain?: unknown
-  seendate?: unknown
-  url?: unknown
-}
-
-function parseGdelt(data: unknown, fallbackCategory: NewsCategory): NewsItem[] {
-  if (!data || typeof data !== 'object' || !Array.isArray((data as { articles?: unknown }).articles)) {
-    throw new NewsSourceFailure('FORMAT')
-  }
-  return (data as { articles: GdeltArticle[] }).articles.flatMap((article) => {
-    if (typeof article.title !== 'string' || typeof article.url !== 'string') return []
-    const url = safeArticleUrl(article.url)
-    if (!url) return []
-    const title = decodeEntities(article.title)
-    const publishedAt = toIsoDate(typeof article.seendate === 'string' ? article.seendate : '')
-    return [item({
-      title,
-      source: typeof article.domain === 'string' && article.domain ? article.domain : 'GDELT',
-      publishedAt,
-      category: categoryFor(title, fallbackCategory),
-      url,
-    })]
+    const publishedAt = toIsoDate(extractTag(match[1], 'pubDate') || extractTag(match[1], 'dc:date'))
+    return [item({ title, source, publishedAt, category: categoryFor(title, fallbackCategory), url })]
   })
 }
 
@@ -150,28 +118,11 @@ export class RssNewsProvider implements NewsProvider {
   readonly source = 'live' as const
 
   async getNews(categories: NewsCategory[], limit = 10): Promise<NewsItem[]> {
-    const fallbackCategory = categories[0] ?? '건설정책'
-    const gdeltUrl = new URL(GDELT_URL)
-    gdeltUrl.search = new URLSearchParams({
-      query: GDELT_QUERY,
-      mode: 'artlist',
-      maxrecords: String(Math.max(20, Math.min(100, limit * 4))),
-      timespan: '7d',
-      format: 'json',
-      sort: 'datedesc',
-    }).toString()
-
-    const results = await Promise.allSettled([
-      fetch(gdeltUrl, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) }).then(async (response) => {
-        if (!response.ok) throw new NewsSourceFailure(`HTTP_${response.status}`)
-        return parseGdelt(await response.json(), fallbackCategory)
-      }),
-      ...FEEDS.map(async (feed) => {
-        const response = await fetch(feed.url, { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) })
-        if (!response.ok) throw new NewsSourceFailure(`HTTP_${response.status}`)
-        return parseRssItems(await response.text(), feed.source, feed.category)
-      }),
-    ])
+    const results = await Promise.allSettled(FEEDS.map(async (feed) => {
+      const response = await fetch(feedUrl(feed), { headers: { 'User-Agent': 'ConstructionDashboard/1.0' }, signal: AbortSignal.timeout(10000) })
+      if (!response.ok) throw new NewsSourceFailure(`HTTP_${response.status}`)
+      return parseRssItems(await response.text(), feed.category)
+    }))
 
     const seen = new Set<string>()
     const news = results

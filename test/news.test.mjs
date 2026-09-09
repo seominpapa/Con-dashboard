@@ -8,198 +8,113 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 
 const NEWS_CATEGORIES = ['건설정책', 'SOC', '건설안전', '중대재해', '건설사', '수주', '부동산', '스마트건설', 'AI/AX', '해외건설']
 
-test('GDELT covers every category, including a distinct serious-accident category', () => {
+const rss = (items) => `<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>${items.map((i) => `<item>
+  <title>${i.title}</title><link>${i.url}</link><pubDate>${i.pubDate ?? 'Mon, 07 Sep 2026 13:00:00 GMT'}</pubDate>
+  <source url="https://${i.host ?? 'news.example.test'}">${i.source ?? 'news.example.test'}</source></item>`).join('')}</channel></rss>`
+
+function mockGoogleNews(t, byQuery) {
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (input) => {
+    const url = new URL(String(input))
+    calls.push(url)
+    if (url.hostname !== 'news.google.com') return new Response('', { status: 503 })
+    const hit = Object.entries(byQuery).find(([needle]) => (url.searchParams.get('q') ?? '').includes(needle))
+    return hit ? hit[1]() : new Response(rss([]))
+  })
+  return calls
+}
+
+test('news categories are covered and only Google News RSS search is used', () => {
   const newsTypes = read('src/shared/types/news.ts')
   const rssProvider = read('src/worker/providers/news/RssNewsProvider.ts')
 
   for (const category of NEWS_CATEGORIES) assert.match(newsTypes, new RegExp(`['"]${category}['"]`))
-  assert.match(rssProvider, /api\.gdeltproject\.org\/api\/v2\/doc\/doc/)
-  assert.match(rssProvider, /sourcelang:korean/)
-  assert.doesNotMatch(rssProvider, /news\.google\.com/)
-  for (const category of NEWS_CATEGORIES) assert.match(rssProvider, new RegExp(`['"]${category}['"]`))
+  assert.match(rssProvider, /news\.google\.com\/rss\/search/)
+  assert.doesNotMatch(rssProvider, /gdeltproject|moel\.go\.kr|molit\.go\.kr/)
   assert.match(rssProvider, /중대재해/)
 })
 
-test('MOEL uses its current policy, notice, and law-information RSS feeds', () => {
-  const rssProvider = read('src/worker/providers/news/RssNewsProvider.ts')
+test('Google News feeds request Korean results for the last week and strip the publisher suffix', async (t) => {
+  const calls = mockGoogleNews(t, {
+    '건설 정책': () => new Response(rss([
+      { title: '현장 &amp; 안전 &lt;점검&gt; - 예시신문', source: '예시신문', url: 'https://news.example.test/article-1' },
+      { title: '현장 &amp; 안전 &lt;점검&gt; - 예시신문', source: '예시신문', url: 'https://news.example.test/article-1' },
+    ])),
+  })
 
-  for (const endpoint of ['policy.do', 'notice.do', 'lawinfo.do']) assert.match(rssProvider, new RegExp(`moel\\.go\\.kr/rss/${endpoint.replace('.', '\\.')}`))
-  assert.doesNotMatch(rssProvider, /moelRssList\.do/)
+  const news = await new RssNewsProvider().getNews(['건설안전', '중대재해'], 10)
+  assert.ok(calls.length >= 5)
+  assert.ok(calls.every((url) => url.hostname === 'news.google.com' && url.searchParams.get('hl') === 'ko' && url.searchParams.get('ceid') === 'KR:ko'))
+  assert.ok(calls.every((url) => (url.searchParams.get('q') ?? '').endsWith('when:7d')))
+  assert.deepEqual(news.map(({ title, source, publishedAt, url }) => ({ title, source, publishedAt, url })), [{
+    title: '현장 & 안전 <점검>',
+    source: '예시신문',
+    publishedAt: '2026-09-07T13:00:00.000Z',
+    url: 'https://news.example.test/article-1',
+  }])
 })
 
-test('construction news keeps official MOLIT RSS results when GDELT is rate-limited', async () => {
-  const originalFetch = globalThis.fetch
-  const calls = []
-  globalThis.fetch = async (input) => {
-    const url = new URL(String(input))
-    calls.push(url)
-    if (url.hostname === 'api.gdeltproject.org') return new Response('', { status: 429 })
-    if (url.hostname === 'www.molit.go.kr' && url.searchParams.get('rss_id') === 'NEWS') {
-      return new Response(`<?xml version="1.0"?><rss><channel><item>
-        <title><![CDATA[국토부 건설현장 안전점검]]></title>
-        <link>https://www.molit.go.kr/article/1</link>
-        <pubDate>Mon, 08 Sep 2026 10:00:00 +0900</pubDate>
-      </item></channel></rss>`)
-    }
-    return new Response('', { status: 503 })
-  }
-
-  try {
-    const news = await new RssNewsProvider().getNews(['건설안전'], 10)
-    assert.ok(calls.some((url) => url.hostname === 'www.molit.go.kr' && url.searchParams.get('rss_id') === 'NEWS'))
-    assert.equal(news.length, 1)
-    assert.equal(news[0].source, '국토교통부')
-    assert.equal(news[0].title, '국토부 건설현장 안전점검')
-  } finally {
-    globalThis.fetch = originalFetch
-  }
+test('partial feed failure keeps the results of the feeds that succeeded', async (t) => {
+  mockGoogleNews(t, {
+    '건설 정책': () => new Response('', { status: 429 }),
+    '건설현장 사고': () => new Response(rss([{ title: '국토부 건설현장 안전점검', url: 'https://www.molit.go.kr/article/1' }])),
+  })
+  const news = await new RssNewsProvider().getNews(['건설안전'], 10)
+  assert.equal(news.length, 1)
+  assert.equal(news[0].title, '국토부 건설현장 안전점검')
 })
 
-test('free news provider makes one Korean GDELT request, normalizes it, and survives partial MOEL failure', async () => {
-  const originalFetch = globalThis.fetch
-  const calls = []
-  globalThis.fetch = async (input) => {
-    const url = new URL(String(input))
-    calls.push(url)
-
-    if (url.hostname === 'api.gdeltproject.org') {
-      return new Response(JSON.stringify({ articles: [{
-        title: '현장 &amp; 안전 &lt;점검&gt;',
-        domain: 'news.example.test',
-        seendate: '20260907T130000Z',
-        url: 'https://news.example.test/article-1',
-      }, {
-        title: '현장 &amp; 안전 &lt;점검&gt;',
-        domain: 'news.example.test',
-        seendate: '20260907T130000Z',
-        url: 'https://news.example.test/article-1',
-      }] }), { status: 200 })
-    }
-
-    return new Response('', { status: 503 })
-  }
-
-  try {
-    const news = await new RssNewsProvider().getNews(['건설안전', '중대재해'], 10)
-    const gdeltCalls = calls.filter((url) => url.hostname === 'api.gdeltproject.org')
-    assert.equal(gdeltCalls.length, 1)
-    assert.match(gdeltCalls[0].searchParams.get('query') ?? '', /sourcelang:korean/)
-    assert.ok(calls.some((url) => url.hostname === 'www.moel.go.kr'))
-    assert.equal(news.filter((item) => item.title === '현장 & 안전 <점검>').length, 1)
-    assert.deepEqual(news[0] && {
-      title: news[0].title,
-      source: news[0].source,
-      publishedAt: news[0].publishedAt,
-      url: news[0].url,
-    }, {
-      title: '현장 & 안전 <점검>',
-      source: 'news.example.test',
-      publishedAt: '2026-09-07T13:00:00.000Z',
-      url: 'https://news.example.test/article-1',
-    })
-  } finally {
-    globalThis.fetch = originalFetch
-  }
+test('free news provider returns only explicitly requested categories', async (t) => {
+  mockGoogleNews(t, {
+    '건설현장 사고': () => new Response(rss([
+      { title: '건설현장 중대재해 사례 공개', url: 'https://safety.example.test/1' },
+      { title: '아파트 분양시장 동향', url: 'https://estate.example.test/1', pubDate: 'Mon, 07 Sep 2026 12:00:00 GMT' },
+    ])),
+  })
+  const news = await new RssNewsProvider().getNews(['중대재해'], 10)
+  assert.ok(news.length > 0)
+  assert.ok(news.every((item) => item.category === '중대재해'))
 })
 
-test('free news provider returns only explicitly requested categories', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (input) => {
-    const url = new URL(String(input))
-    if (url.hostname === 'api.gdeltproject.org') {
-      return new Response(JSON.stringify({ articles: [
-        { title: '건설현장 중대재해 사례 공개', domain: 'safety.example.test', seendate: '20260907T130000Z', url: 'https://safety.example.test/1' },
-        { title: '아파트 분양시장 동향', domain: 'estate.example.test', seendate: '20260907T120000Z', url: 'https://estate.example.test/1' },
-      ] }))
-    }
-    return new Response('', { status: 503 })
-  }
-
-  try {
-    const news = await new RssNewsProvider().getNews(['중대재해'], 10)
-    assert.ok(news.length > 0)
-    assert.ok(news.every((item) => item.category === '중대재해'))
-  } finally {
-    globalThis.fetch = originalFetch
-  }
+test('free news provider returns an empty list when sources succeed without a requested-category match', async (t) => {
+  mockGoogleNews(t, { '건설현장 사고': () => new Response(rss([{ title: '아파트 분양시장 동향', url: 'https://estate.example.test/1' }])) })
+  assert.deepEqual(await new RssNewsProvider().getNews(['해외건설'], 10), [])
 })
 
-test('free news provider returns an empty list when sources succeed without a requested-category match', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (input) => {
-    const url = new URL(String(input))
-    if (url.hostname === 'api.gdeltproject.org') {
-      return new Response(JSON.stringify({ articles: [
-        { title: '아파트 분양시장 동향', domain: 'estate.example.test', seendate: '20260907T120000Z', url: 'https://estate.example.test/1' },
-      ] }))
-    }
-    return new Response('', { status: 503 })
-  }
-
-  try {
-    assert.deepEqual(await new RssNewsProvider().getNews(['AI/AX'], 10), [])
-  } finally {
-    globalThis.fetch = originalFetch
-  }
+test('news source failures disguised as HTTP 200 do not replace saved news with an empty success', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response('<html><body>blocked</body></html>'))
+  await assert.rejects(new RssNewsProvider().getNews([], 10), /뉴스 소스 조회에 실패했습니다/)
 })
 
-test('news source failures disguised as HTTP 200 do not replace saved news with an empty success', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (input) => new Response(new URL(String(input)).hostname === 'api.gdeltproject.org'
-    ? JSON.stringify({ error: 'temporarily unavailable' })
-    : '<html><body>Service temporarily unavailable</body></html>')
-  try {
-    await assert.rejects(new RssNewsProvider().getNews([], 10), /뉴스 소스 조회에 실패/)
-  } finally {
-    globalThis.fetch = originalFetch
-  }
+test('a valid empty RSS channel remains a successful empty result', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(rss([])))
+  assert.deepEqual(await new RssNewsProvider().getNews([], 10), [])
 })
 
-test('a valid empty RSS channel remains a successful empty result', async () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async (input) => new URL(String(input)).hostname === 'api.gdeltproject.org'
-    ? new Response('', { status: 429 })
-    : new Response('<?xml version="1.0"?><rss version="2.0"><channel><title>보도자료</title></channel></rss>')
-  try {
-    assert.deepEqual(await new RssNewsProvider().getNews([], 10), [])
-  } finally {
-    globalThis.fetch = originalFetch
-  }
-})
-
-test('each news source has a timeout signal so one stalled source cannot hang the widget', async () => {
-  const originalFetch = globalThis.fetch
+test('each news source has a timeout signal so one stalled source cannot hang the widget', async (t) => {
   const signals = []
-  globalThis.fetch = async (_input, init) => {
-    signals.push(init?.signal)
-    return new Response('', { status: 503 })
-  }
-  try {
-    await assert.rejects(new RssNewsProvider().getNews([], 10))
-    assert.equal(signals.length, 6)
-    assert.ok(signals.every((signal) => signal instanceof AbortSignal))
-  } finally {
-    globalThis.fetch = originalFetch
-  }
+  t.mock.method(globalThis, 'fetch', async (_input, init) => { signals.push(init?.signal); return new Response(rss([])) })
+  await new RssNewsProvider().getNews([], 10)
+  assert.ok(signals.length >= 5)
+  assert.ok(signals.every((signal) => signal instanceof AbortSignal))
 })
 
 test('all failed news sources expose only fixed IDs and failure codes, never upstream error details', async (t) => {
   const privateDetail = 'private-upstream-body-and-credential'
   t.mock.method(globalThis, 'fetch', async (input) => {
-    const url = new URL(String(input))
-    if (url.hostname === 'api.gdeltproject.org') return new Response(privateDetail, { status: 429 })
-    if (url.searchParams.get('rss_id') === 'NEWS') throw new DOMException(privateDetail, 'TimeoutError')
-    if (url.pathname === '/rss/policy.do') return new Response(`<html>${privateDetail}</html>`)
+    const q = new URL(String(input)).searchParams.get('q') ?? ''
+    if (q.includes('건설 정책')) return new Response(privateDetail, { status: 429 })
+    if (q.includes('건설현장 사고')) throw new DOMException(privateDetail, 'TimeoutError')
+    if (q.includes('건설사 수주')) return new Response(`<html>${privateDetail}</html>`)
     throw new Error(privateDetail)
   })
   await assert.rejects(new RssNewsProvider().getNews([], 10), (error) => {
     assert.equal(error.name, 'NewsSourcesUnavailableError')
-    assert.match(error.message, /GDELT=HTTP_429/)
-    assert.match(error.message, /MOLIT_NEWS=TIMEOUT/)
-    assert.match(error.message, /MOLIT_N01_B=NETWORK/)
-    assert.match(error.message, /MOEL_POLICY=FORMAT_HTML(?:,|\])/)
-    assert.match(error.message, /MOEL_NOTICE=NETWORK/)
-    assert.match(error.message, /MOEL_LAWINFO=NETWORK/)
+    assert.match(error.message, /POLICY=HTTP_429/)
+    assert.match(error.message, /SAFETY=TIMEOUT/)
+    assert.match(error.message, /ORDER=FORMAT_HTML(?:,|\])/)
+    assert.match(error.message, /ESTATE=NETWORK/)
+    assert.match(error.message, /TECH=NETWORK/)
     assert.ok(!error.message.includes(privateDetail))
     assert.ok(!error.message.includes('https://'))
     return true
@@ -213,18 +128,17 @@ for (const [code, body] of [
   ['FORMAT_OTHER', '{"private-response-body":true}'],
 ]) {
   test(`news RSS diagnostic distinguishes ${code} without exposing its body`, async (t) => {
-    t.mock.method(globalThis, 'fetch', async (input) => new URL(String(input)).pathname === '/rss/policy.do'
+    t.mock.method(globalThis, 'fetch', async (input) => (new URL(String(input)).searchParams.get('q') ?? '').includes('건설 정책')
       ? new Response(body)
       : new Response('', { status: 503 }))
     await assert.rejects(new RssNewsProvider().getNews([], 10), (error) => {
-      assert.ok(error.message.includes(`MOEL_POLICY=${code}`))
+      assert.ok(error.message.includes(`POLICY=${code}`))
       assert.ok(!error.message.includes('private-response-body'))
       assert.ok(!error.message.includes('<rss>'))
       return true
     })
   })
 }
-
 test('public API connections accept an optional ISO expiry date and return its derived state', () => {
   const integrationTypes = read('src/shared/types/integration.ts')
   const adminRoute = read('src/worker/routes/admin/integrations.ts')

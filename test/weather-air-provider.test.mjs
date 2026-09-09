@@ -33,18 +33,24 @@ test('KMA warning 403 explains that warning API approval is separate from foreca
   }
 })
 
-test('KMA warning responses with numeric station ids do not crash regional filtering', async () => {
+test('KMA warning responses with numeric station ids do not crash regional filtering and only the latest bulletin is returned', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response(JSON.stringify({
     response: {
       header: { resultCode: '00' },
-      body: { items: { item: [{ stnId: 108, areaName: '경기도 안성시', title: '호우주의보', tmFc: '202609081000' }] } },
+      body: { items: { item: [
+        { stnId: 108, areaName: '경기도 안성시', title: '호우주의보', tmFc: '202609081000' },
+        { stnId: 108, areaName: '경기도 안성시', title: '강풍경보', tmFc: '202609091501' },
+        { stnId: 108, areaName: '경기도 안성시', title: '풍랑주의보', tmFc: '202609091300' },
+      ] } },
     },
   }))
   try {
     const alerts = await new KmaWeatherProvider('test-key').getAlerts(site)
     assert.equal(alerts.length, 1)
     assert.equal(alerts[0].region, '경기도 안성시')
+    assert.equal(alerts[0].title, '강풍경보')
+    assert.equal(alerts[0].level, '경보')
   } finally {
     globalThis.fetch = originalFetch
   }

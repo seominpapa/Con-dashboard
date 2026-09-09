@@ -40,7 +40,7 @@ export function NewsPage() {
         </ul>
       )}
       <p className="mt-3 text-[11px] text-slate-400">
-        뉴스 데이터: <a href="https://www.gdeltproject.org/" target="_blank" rel="noreferrer" className="hover:text-blue-600 hover:underline">GDELT Project</a> 및 고용노동부 공식 RSS
+        뉴스 데이터: <a href="https://news.google.com/?hl=ko&gl=KR&ceid=KR:ko" target="_blank" rel="noreferrer" className="hover:text-blue-600 hover:underline">Google 뉴스</a> RSS 검색
       </p>
     </div>
   )

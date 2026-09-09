@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable'
 import { Plus } from 'lucide-react'
-import { WidgetCard } from './WidgetCard'
+import { WidgetCard, MAX_COLUMNS, MAX_ROWS } from './WidgetCard'
 import { WidgetPicker } from './WidgetPicker'
 import { useIsMobile } from '../../hooks/useIsMobile'
 import { useSites } from '../../context/SiteContext'
@@ -15,6 +15,19 @@ import {
   type DashboardWidgetInstance,
 } from '../../lib/dashboardRepository'
 import { mergeWidgetSettings } from '../../../shared/utils/dashboardConfig'
+import type { WidgetDefinition, WidgetSize } from '../../../shared/types/widget'
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+/** settings.span(너비)·settings.rows(높이)를 registry의 min/max 안으로 정규화한다. */
+function widgetSize(w: DashboardWidgetInstance, def: WidgetDefinition): WidgetSize {
+  const span = typeof w.settings?.span === 'number' ? w.settings.span : def.defaultSize.w
+  const rows = typeof w.settings?.rows === 'number' ? w.settings.rows : def.defaultSize.h
+  return {
+    w: clamp(span, Math.min(def.minSize.w, MAX_COLUMNS), Math.min(def.maxSize.w, MAX_COLUMNS)),
+    h: clamp(rows, Math.min(def.minSize.h, MAX_ROWS), Math.min(def.maxSize.h, MAX_ROWS)),
+  }
+}
 
 /**
  * 기획 1, 2, 24번 핵심: PC 2~4열 / 태블릿 2열 / 모바일 1열 반응형 그리드,
@@ -85,20 +98,9 @@ export function DashboardGrid() {
     setPickerOpen(false)
   }
 
-  function handleCycleSize(instanceId: string) {
+  function handleResize(instanceId: string, size: WidgetSize) {
     if (!config) return
-    const next: DashboardConfig = {
-      ...config,
-      desktopOrder: config.desktopOrder.map((w) => {
-        if (w.instanceId !== instanceId) return w
-        const def = getWidgetDefinition(w.widgetId)
-        const maxSpan = def?.maxSize.w ?? 1
-        const current = (w.settings?.span as number) ?? def?.defaultSize.w ?? 1
-        const nextSpan = current >= maxSpan ? 1 : current + 1
-        return { ...w, settings: { ...w.settings, span: nextSpan } }
-      }),
-    }
-    persist(next)
+    persist(mergeWidgetSettings(config, instanceId, { span: size.w, rows: size.h }))
   }
 
   function handleSettingsChange(instanceId: string, settings: Record<string, unknown>) {
@@ -132,19 +134,19 @@ export function DashboardGrid() {
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={visible.map((w) => w.instanceId)} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:auto-rows-[minmax(12rem,auto)] md:grid-cols-2 xl:grid-cols-3">
             {visible.map((w) => {
               const def = getWidgetDefinition(w.widgetId)!
-              const span = Math.min((w.settings?.span as number) ?? def.defaultSize.w, def.maxSize.w)
               return (
                 <WidgetCard
                   key={w.instanceId}
                   instance={w}
                   siteId={activeSiteId ?? ''}
-                  span={span}
-                  maxSpan={def.maxSize.w}
+                  size={widgetSize(w, def)}
+                  minSize={def.minSize}
+                  maxSize={def.maxSize}
                   onHide={handleHide}
-                  onCycleSize={handleCycleSize}
+                  onResize={handleResize}
                   onSettingsChange={handleSettingsChange}
                 />
               )
