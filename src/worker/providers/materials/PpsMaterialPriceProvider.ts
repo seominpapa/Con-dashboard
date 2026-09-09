@@ -8,10 +8,15 @@ export class PpsApiError extends Error {}
 
 const ERROR_GUIDANCE: Record<string, string> = {
   '01': '기관 내부 오류입니다. 잠시 후 다시 시도해 주세요',
+  '02': '기관 서비스 제공 상태를 확인해 주세요. 잠시 후 다시 시도해 주세요',
   '03': '조회 결과 없음',
   '04': '기관 API 요청 처리에 실패했습니다',
   '05': '기관 응답 대기시간을 초과했습니다. 잠시 후 다시 시도해 주세요',
+  '06': '조회 날짜의 형식이 올바르지 않습니다. 시작일·종료일 형식을 확인해 주세요',
+  '07': '요청 입력값의 허용 범위를 초과했습니다. 조회 기간과 요청변수 범위를 확인해 주세요',
+  '08': '필수 요청변수가 누락되었습니다. API 요청 항목을 확인해 주세요',
   '10': '조회 요청변수 또는 날짜 형식을 확인해 주세요',
+  '11': '필수 요청변수가 누락되었습니다. API 요청 항목을 확인해 주세요',
   '12': 'API 서비스 주소를 확인해 주세요',
   '20': '인증키 전달 및 가격정보현황서비스 활용신청·승인·중지 상태를 확인해 주세요',
   '22': '일일 호출 한도를 초과했습니다. 초기화 이후 재시도하거나 한도 증설을 신청하세요',
@@ -22,9 +27,14 @@ const ERROR_GUIDANCE: Record<string, string> = {
 }
 
 function safePpsError(status: number, code: unknown): PpsApiError {
-  const known = typeof code === 'string' && Object.hasOwn(ERROR_GUIDANCE, code)
-  const detail = known ? ERROR_GUIDANCE[code] : status >= 500 ? '기관 서버 오류입니다. 잠시 후 다시 시도해 주세요' : '알 수 없는 응답입니다. API 승인 상태와 기관 응답을 확인해 주세요'
-  return new PpsApiError(`조달청 가격정보 API: ${detail} (HTTP ${status}${known ? `, 코드 ${code}` : ''})`)
+  // 진단 표시만 정규화한다. 성공 판정은 기존 문자열 '00' 그대로 유지한다.
+  const diagnosticCode = typeof code === 'string' && /^\d{2,3}$/.test(code) ? code
+    : typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 999 ? String(code).padStart(2, '0') : null
+  const detail = diagnosticCode && Object.hasOwn(ERROR_GUIDANCE, diagnosticCode) ? ERROR_GUIDANCE[diagnosticCode]
+    : status >= 500 ? '기관 서버 오류입니다. 잠시 후 다시 시도해 주세요' : '알 수 없는 응답입니다. 아래 응답코드를 관리자에게 전달해 주세요'
+  // 응답 원문/resultMsg에는 인증키가 포함될 수 있어 숫자 코드만 노출한다.
+  const diagnostic = diagnosticCode ? `코드 ${diagnosticCode}` : code == null ? '응답코드 누락' : '응답코드 형식 오류'
+  return new PpsApiError(`조달청 가격정보 API: ${detail} (HTTP ${status}, ${diagnostic})`)
 }
 const KEYWORDS: Record<string, string[]> = {
   rebar: ['철근', '이형봉강'],

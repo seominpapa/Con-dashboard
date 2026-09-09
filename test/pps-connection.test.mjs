@@ -56,6 +56,51 @@ for (const [format, code, text] of [['json', '30', '인증키'], ['xml', '20', '
   })
 }
 
+for (const [code, expected] of [['02', /기관.*서비스/], ['06', /날짜.*형식/], ['07', /입력.*범위/], ['08', /필수.*누락/], ['11', /필수.*누락/]]) {
+  test(`PPS HTTP 200 application error ${code} preserves actionable diagnostics on connect and retest`, async (t) => {
+    let reject = false
+    const { sqlite, connect, retest } = setup(t, () => Response.json(reject
+      ? { response: { header: { resultCode: code, resultMsg: secret } } }
+      : { header: { resultCode: '00' }, body: { items: [] } }))
+    assert.equal((await connect()).status, 200)
+    reject = true
+    const tested = (await (await retest()).json()).data.testResult
+    assert.equal(tested.ok, false)
+    assert.match(tested.message, expected)
+    assert.ok(tested.message.includes(`HTTP 200, 코드 ${code}`))
+    assert.ok(!tested.message.includes(secret))
+    const encrypted = sqlite.prepare('SELECT encrypted_credential FROM integrations').get().encrypted_credential
+    const response = await connect()
+    assert.equal(response.status, 400)
+    assert.equal((await response.json()).message, tested.message)
+    assert.equal(sqlite.prepare('SELECT encrypted_credential FROM integrations').get().encrypted_credential, encrypted)
+  })
+}
+
+for (const code of ['99', '000', 7, 0]) {
+  test(`PPS unsupported code ${JSON.stringify(code)} stays an error with bounded diagnostic code`, async (t) => {
+    const { connect } = setup(t, () => Response.json({ header: { resultCode: code, resultMsg: secret }, body: { items: [] } }))
+    const response = await connect()
+    assert.equal(response.status, 400)
+    const message = (await response.json()).message
+    assert.ok(message.includes(`코드 ${String(code).padStart(2, '0')}`))
+    assert.ok(!message.includes(secret))
+  })
+}
+
+test('PPS missing or malformed diagnostic codes never echo arbitrary response content', async (t) => {
+  let code
+  const { connect } = setup(t, () => Response.json({ header: { resultCode: code, resultMsg: secret } }))
+  for (const value of [undefined, null, secret, '1234567890', '<script>', { value: secret }, 1.5, -1, 1000]) {
+    code = value
+    const response = await connect()
+    assert.equal(response.status, 400)
+    const message = (await response.json()).message
+    assert.match(message, value == null ? /응답코드 누락/ : /응답코드 형식 오류/)
+    assert.ok(!message.includes(secret))
+  }
+})
+
 for (const [name, upstream, expected] of [
   ['timeout', () => { throw new DOMException(secret, 'TimeoutError') }, /시간.*초과/],
   ['network', () => { throw new TypeError(secret) }, /통신/],
