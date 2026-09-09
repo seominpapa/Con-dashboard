@@ -60,8 +60,7 @@ export function AiBriefingWidget({}: WidgetProps) {
         </div>
       ) : status === 'error' ? (
         <div className="flex h-full flex-col items-center justify-center gap-2 py-4 text-center text-slate-400">
-          <p className="text-xs">오늘 AI 브리핑을 생성하지 못했습니다.</p>
-          {data.message && <p className="text-[10px] text-slate-400">{data.message}</p>}
+          <p className="text-xs">{data.message ?? '오늘 AI 브리핑을 생성하지 못했습니다.'}</p>
         </div>
       ) : structured ? (
         <div className="space-y-3">

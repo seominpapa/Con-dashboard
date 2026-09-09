@@ -14,25 +14,45 @@ test('PPS material provider calls the official total endpoint and does not inven
     assert.equal(url.origin + url.pathname, 'https://apis.data.go.kr/1230000/ao/PriceInfoService/getPriceInfoListFcltyCmmnMtrilTotal')
     assert.equal(url.searchParams.get('serviceKey'), 'encoded/key=')
     assert.equal(url.searchParams.get('type'), 'json')
+    assert.equal(url.searchParams.get('pageNo'), '1')
+    assert.equal(url.searchParams.get('numOfRows'), '1000')
+    assert.equal(url.searchParams.get('inqryDiv'), '1')
+    assert.match(url.searchParams.get('inqryBgnDate') ?? '', /^\d{8}$/)
+    assert.match(url.searchParams.get('inqryEndDate') ?? '', /^\d{8}$/)
+    assert.ok(url.searchParams.get('inqryBgnDate') <= url.searchParams.get('inqryEndDate'))
     return new Response(JSON.stringify({
-      response: {
-        header: { resultCode: '00' },
-        body: {
-          items: [
-            { itemNm: '이형철근 SD400 D10', unitPrce: '765000', unit: 'ton', stdrDt: '2026-08-01' },
-            { itemNm: '포틀랜드 시멘트', unitPrce: '110000', unit: 'ton', stdrDt: '2026-08-01' },
-          ],
-        },
+      header: { resultCode: '00' },
+      body: {
+        items: [
+          { prdctClsfcNoNm: '철근', krnPrdctNm: '이형철근 SD400 D10', prce: '765000', unit: 'ton', nticeDt: '20260801' },
+          { prdctClsfcNoNm: '시멘트', krnPrdctNm: '포틀랜드 시멘트', prce: '110000', unit: 'ton', nticeDt: '20260801' },
+        ],
       },
     }))
   }
 
   try {
     const prices = await new PpsMaterialPriceProvider('encoded%2Fkey%3D').getPrices(['rebar', 'cement'])
-    assert.deepEqual(prices.map(({ materialKey, price, hasTrend, isMock }) => ({ materialKey, price, hasTrend, isMock })), [
-      { materialKey: 'rebar', price: 765000, hasTrend: false, isMock: false },
-      { materialKey: 'cement', price: 110000, hasTrend: false, isMock: false },
+    assert.deepEqual(prices.map(({ materialKey, price, hasTrend, isMock, updatedAt }) => ({ materialKey, price, hasTrend, isMock, updatedAt })), [
+      { materialKey: 'rebar', price: 765000, hasTrend: false, isMock: false, updatedAt: '20260801' },
+      { materialKey: 'cement', price: 110000, hasTrend: false, isMock: false, updatedAt: '20260801' },
     ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('PPS material provider keeps supporting the nested response envelope', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    response: {
+      header: { resultCode: '00' },
+      body: { items: [{ prdctClsfcNoNm: '시멘트', krnPrdctNm: '포틀랜드 시멘트', prce: '110000', unit: 'ton' }] },
+    },
+  }))
+  try {
+    const [price] = await new PpsMaterialPriceProvider('key').getPrices(['cement'])
+    assert.equal(price.price, 110000)
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -40,9 +60,25 @@ test('PPS material provider calls the official total endpoint and does not inven
 
 test('PPS material provider rejects invalid upstream responses so the route can use Mock fallback', async () => {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response(JSON.stringify({ response: { header: { resultCode: '30' } } }))
+  globalThis.fetch = async () => new Response(JSON.stringify({ header: { resultCode: '30' }, body: { detail: 'must-not-leak' } }))
   try {
-    await assert.rejects(() => new PpsMaterialPriceProvider('key').getPrices(['rebar']), /PPS API resultCode=30/)
+    await assert.rejects(
+      () => new PpsMaterialPriceProvider('key').getPrices(['rebar']),
+      (error) => error instanceof Error && error.message === 'PPS API resultCode=30' && !error.message.includes('must-not-leak'),
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('PPS material provider rejects an empty successful response so the route can use Mock fallback', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({ header: { resultCode: '00' }, body: { items: [] } }))
+  try {
+    await assert.rejects(
+      () => new PpsMaterialPriceProvider('key').getPrices(['rebar']),
+      /선택한 자재 가격이 없습니다/,
+    )
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -82,5 +118,5 @@ test('material prices have a dedicated admin integration and prefer its credenti
   assert.match(registry, /materialCredential\?\.apiKey \|\| g2bCredential\?\.apiKey \|\| env\.MATERIAL_PRICE_SERVICE_KEY \|\| env\.G2B_SERVICE_KEY/)
   assert.match(adminRoute, /case 'material_prices'/)
   assert.match(adminRoute, /PpsMaterialPriceProvider/)
-  assert.match(adminRoute, /getPrices\(\['rebar'\]\)/)
+  assert.match(adminRoute, /healthCheck\(\)/)
 })

@@ -33,6 +33,7 @@ export class ClaudeProvider implements LLMProvider {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000),
     })
     if (!res.ok) {
       throw new Error(formatProviderHttpError('Claude', res.status))

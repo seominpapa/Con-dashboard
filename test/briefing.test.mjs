@@ -38,7 +38,7 @@ test('failed daily briefings are deleted and retried while successful briefings 
   assert.equal(await loadSuccessfulCachedBriefing(successRepo, 'user-1', '2026-09-08'), success)
 })
 
-test('legacy empty daily briefing is discarded once while a useful success cache is preserved', async () => {
+test('all successful daily briefings remain cached regardless of summary wording', async () => {
   const legacyEmpty = {
     id: 'brief-empty',
     status: 'success',
@@ -57,8 +57,8 @@ test('legacy empty daily briefing is discarded once while a useful success cache
     deleteErrorByUserAndDate: async () => {},
     deleteLegacyEmptySuccessById: async (id) => { deletedId = id },
   }
-  assert.equal(await loadSuccessfulCachedBriefing(legacyRepo, 'user-1', '2026-09-08'), null)
-  assert.equal(deletedId, 'brief-empty')
+  assert.equal(await loadSuccessfulCachedBriefing(legacyRepo, 'user-1', '2026-09-08'), legacyEmpty)
+  assert.equal(deletedId, null)
 
   const useful = {
     ...legacyEmpty,
@@ -145,8 +145,18 @@ test('briefing generation attempts are rate limited even when failures are not c
   assert.match(source, /finally\s*\{[\s\S]*delete\(leaseKey\)/)
 })
 
+test('briefing requires strict structured output and keeps success independent from usage logging', () => {
+  const source = readFileSync(new URL('../src/worker/briefing/BriefingService.ts', import.meta.url), 'utf8')
+  assert.match(source, /jsonSchema: BRIEFING_JSON_SCHEMA/)
+  assert.match(source, /usage logging failed/)
+  assert.ok(source.indexOf('tryInsert') < source.indexOf('usage logging failed'))
+})
+
 test('AI briefing widget exposes transport errors from the shared data hook', () => {
   const source = readFileSync(new URL('../src/client/widgets/AiBriefingWidget.tsx', import.meta.url), 'utf8')
   assert.match(source, /data, loading, error, updatedAt, refresh/)
   assert.match(source, /error=\{error\}/)
+  const errorBranch = source.slice(source.indexOf("status === 'error'"), source.indexOf(': structured ?'))
+  assert.match(errorBranch, /data\.message \?\? '오늘 AI 브리핑을 생성하지 못했습니다\.'/)
+  assert.equal((errorBranch.match(/오늘 AI 브리핑을 생성하지 못했습니다/g) ?? []).length, 1)
 })

@@ -28,10 +28,14 @@ export class CodexProvider implements LLMProvider {
     if (this.model === 'gpt-5.1' || this.model.startsWith('gpt-5.6')) {
       body.reasoning_effort = 'none'
       body.temperature = options?.temperature ?? 0.4
-    } else if (this.model !== 'gpt-5-mini') {
+    } else if (this.model === 'gpt-5-mini') {
+      body.reasoning_effort = 'minimal'
+    } else {
       body.temperature = options?.temperature ?? 0.4
     }
-    if (options?.jsonMode) {
+    if (options?.jsonSchema) {
+      body.response_format = { type: 'json_schema', json_schema: { name: 'structured_output', strict: true, schema: options.jsonSchema } }
+    } else if (options?.jsonMode) {
       body.response_format = { type: 'json_object' }
     }
 
@@ -42,6 +46,7 @@ export class CodexProvider implements LLMProvider {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000),
     })
     if (!res.ok) {
       const payload: any = await res.json().catch(() => null)
@@ -50,7 +55,11 @@ export class CodexProvider implements LLMProvider {
       throw new Error(formatProviderHttpError('OpenAI', res.status, { code, param }))
     }
     const json: any = await res.json()
-    const text = json.choices?.[0]?.message?.content ?? ''
+    const choice = json.choices?.[0]
+    if (choice?.finish_reason === 'length') throw new Error('OpenAI 응답이 출력 토큰 한도로 중단되었습니다')
+    if (choice?.message?.refusal || choice?.finish_reason === 'content_filter') throw new Error('OpenAI가 브리핑 생성을 거절했습니다')
+    const text = choice?.message?.content
+    if (typeof text !== 'string' || !text.trim()) throw new Error('OpenAI가 빈 응답을 반환했습니다')
     return {
       text,
       model: json.model ?? this.model,

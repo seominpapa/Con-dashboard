@@ -12,6 +12,7 @@ export interface LLMMessage {
 export interface LLMGenerateOptions {
   /** JSON 구조화 출력을 강제할지 여부 (기획 44번 Structured Output) */
   jsonMode?: boolean
+  jsonSchema?: Record<string, unknown>
   maxTokens?: number
   temperature?: number
 }

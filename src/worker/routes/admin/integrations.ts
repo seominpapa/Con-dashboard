@@ -80,7 +80,7 @@ async function testPublicCredential(provider: PublicApiProviderKey, credential: 
       case 'material_prices': {
         const { PpsMaterialPriceProvider } = await import('../../providers/materials/PpsMaterialPriceProvider')
         const p = new PpsMaterialPriceProvider(credential.apiKey)
-        await p.getPrices(['rebar'])
+        await p.healthCheck()
         break
       }
       case 'law': {

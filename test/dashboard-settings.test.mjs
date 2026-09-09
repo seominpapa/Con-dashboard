@@ -34,10 +34,10 @@ test('dashboard config validation accepts widget settings and rejects malformed 
   )
 })
 
-test('dashboard sync invalidates a pre-config briefing only once', () => {
+test('dashboard sync never deletes the successful daily briefing cache', () => {
   const route = readFileSync(new URL('../src/worker/routes/dashboard.ts', import.meta.url), 'utf8')
-  assert.match(route, /if \(!previous\)/)
-  assert.doesNotMatch(route, /JSON\.stringify\(previous\) !== JSON\.stringify\(body\)/)
+  assert.doesNotMatch(route, /DELETE FROM ai_briefings/)
+  assert.doesNotMatch(route, /todayKeySeoul/)
 
   const grid = readFileSync(new URL('../src/client/components/dashboard/DashboardGrid.tsx', import.meta.url), 'utf8')
   assert.ok(grid.indexOf('setConfig(loaded)') < grid.indexOf('syncDashboardConfigToServer(loaded)'))

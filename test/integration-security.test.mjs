@@ -133,7 +133,7 @@ test('OpenAI health check uses a GPT-5.1 compatible request', async () => {
     const incompatible =
       body.max_completion_tokens < 32 ||
       ((body.model === 'gpt-5.1' || body.model.startsWith('gpt-5.6')) && body.reasoning_effort !== 'none') ||
-      (body.model === 'gpt-5-mini' && ('reasoning_effort' in body || 'temperature' in body)) ||
+      (body.model === 'gpt-5-mini' && (body.reasoning_effort !== 'minimal' || 'temperature' in body)) ||
       (body.model === 'gpt-4.1' && 'reasoning_effort' in body)
     if (incompatible) {
       return new Response(JSON.stringify({ error: { code: 'invalid_request_error', param: 'max_completion_tokens' } }), { status: 400 })
@@ -150,11 +150,20 @@ test('OpenAI health check uses a GPT-5.1 compatible request', async () => {
       ok: true,
       message: '연결 확인 완료 (model: gpt-5.1)',
     })
-    await provider.generateBriefing('system', 'user', { jsonMode: true })
+    const schema = {
+      type: 'object',
+      properties: { summary: { type: 'string' } },
+      required: ['summary'],
+      additionalProperties: false,
+    }
+    await provider.generateBriefing('system', 'user', { jsonMode: true, jsonSchema: schema })
     await provider.chat([{ role: 'user', content: 'hello' }])
     assert.deepEqual(provider.getAvailableModels(), ['gpt-5.1', 'gpt-5.6', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5-mini', 'gpt-4.1'])
     assert.equal(requests[1].messages[0].role, 'developer')
-    assert.deepEqual(requests[1].response_format, { type: 'json_object' })
+    assert.deepEqual(requests[1].response_format, {
+      type: 'json_schema',
+      json_schema: { name: 'structured_output', strict: true, schema },
+    })
     assert.equal((await new CodexProvider('test-key', 'gpt-5-mini').healthCheck()).ok, true)
     assert.equal((await new CodexProvider('test-key', 'gpt-4.1').healthCheck()).ok, true)
     assert.equal((await new CodexProvider('test-key', 'gpt-5.6').healthCheck()).ok, true)

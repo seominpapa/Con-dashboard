@@ -3,7 +3,6 @@ import type { AppEnv } from '../env'
 import { DashboardConfigRepository } from '../repositories/DashboardConfigRepository'
 import { ok } from '../../shared/types/common'
 import { normalizeDashboardConfig } from '../../shared/utils/dashboardConfig'
-import { todayKeySeoul } from '../../shared/utils/timezone'
 
 const app = new Hono<AppEnv>()
 
@@ -26,13 +25,7 @@ app.put('/config', async (c) => {
     return c.json({ status: 'error', data: null, message: error instanceof Error ? error.message : '요청이 올바르지 않습니다' }, 400)
   }
   const repo = new DashboardConfigRepository(c.env.DB)
-  const previous = await repo.get(user.id)
   await repo.save(user.id, body)
-  if (!previous) {
-    await c.env.DB.prepare('DELETE FROM ai_briefings WHERE user_id = ? AND briefing_date = ?')
-      .bind(user.id, todayKeySeoul())
-      .run()
-  }
   return c.json(ok({ saved: true }, 'live'))
 })
 

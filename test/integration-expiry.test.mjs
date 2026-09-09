@@ -219,10 +219,8 @@ test('material price integration tests the PPS material endpoint instead of the 
     const url = new URL(String(input))
     requestedPath = url.pathname
     return new Response(JSON.stringify({
-      response: {
-        header: { resultCode: '00' },
-        body: { items: [{ itemNm: '이형철근 SD400 D10', unitPrce: '765000', unit: 'ton', stdrDt: '2026-08-01' }] },
-      },
+      header: { resultCode: '00' },
+      body: { items: [] },
     }))
   }
 

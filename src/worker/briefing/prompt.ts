@@ -1,5 +1,35 @@
 import type { BriefingContext } from './BriefingContextBuilder'
 
+const sourceWidgets = { type: 'array', items: { type: 'string' } }
+const listItems = {
+  type: 'array',
+  items: {
+    type: 'object', additionalProperties: false,
+    properties: { title: { type: 'string' }, detail: { type: 'string' }, sourceWidgets },
+    required: ['title', 'detail', 'sourceWidgets'],
+  },
+}
+
+export const BRIEFING_JSON_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    summary: { type: 'string' },
+    priorityItems: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          level: { type: 'string', enum: ['high', 'normal', 'low'] },
+          title: { type: 'string' }, reason: { type: 'string' }, sourceWidgets,
+        },
+        required: ['level', 'title', 'reason', 'sourceWidgets'],
+      },
+    },
+    scheduleItems: listItems, riskItems: listItems, marketItems: listItems, informationItems: listItems,
+  },
+  required: ['summary', 'priorityItems', 'scheduleItems', 'riskItems', 'marketItems', 'informationItems'],
+}
+
 /**
  * AI Briefing 프롬프트 (기획 45~48번 원칙 반영)
  *
@@ -28,7 +58,7 @@ export function buildSystemPrompt(): string {
 5. 각 priorityItems 항목에는 반드시 sourceWidgets 배열(해당 정보의 근거가 된 위젯 키)을 포함하세요.
 6. Context에 없는 위젯 데이터에 대해서는 절대 언급하지 마세요.
 7. seriousAccidents의 중대재해 항목은 우선순위가 높은 안전 정보입니다. 제목, 출처, 날짜, 링크에 적힌 사실만 요약하고, Context에 없는 사고 원인·법적 책임·예방 조치를 지어내지 마세요. sourceWidgets에는 "constructionNews"를 사용하세요.
-8. 반드시 아래 JSON 스키마와 정확히 일치하는 JSON만 출력하세요. 다른 설명 텍스트는 포함하지 마세요.
+8. 반드시 아래 JSON 스키마와 정확히 일치하는 JSON만 출력하세요. 다른 설명 텍스트는 포함하지 마세요. 각 배열은 중요한 항목 최대 3개만 간결하게 작성하고, 해당 정보가 없으면 빈 배열로 출력하세요.
 
 출력 JSON 스키마:
 {

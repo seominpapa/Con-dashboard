@@ -18,11 +18,19 @@ const KEYWORDS: Record<string, string[]> = {
   nickel: ['니켈'],
 }
 
-function asItems(json: any): any[] {
-  const items = json?.response?.body?.items
+function responseEnvelope(json: any): any {
+  return json?.response ?? json
+}
+
+function asItems(envelope: any): any[] {
+  const items = envelope?.body?.items
   if (Array.isArray(items)) return items
   if (Array.isArray(items?.item)) return items.item
   return items?.item ? [items.item] : []
+}
+
+function dateKey(date: Date): string {
+  return date.toISOString().slice(0, 10).replaceAll('-', '')
 }
 
 function numberFrom(item: any): number {
@@ -41,20 +49,33 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
     this.serviceKey = normalizeDataGoKrServiceKey(serviceKey)
   }
 
-  async getPrices(materialKeys: string[]): Promise<MaterialPriceItem[]> {
+  private async fetchItems(): Promise<any[]> {
+    const endDate = new Date()
+    const beginDate = new Date(endDate.getTime() - 366 * 86400000)
     const url = new URL(ENDPOINT)
     url.searchParams.set('serviceKey', this.serviceKey)
     url.searchParams.set('numOfRows', '1000')
     url.searchParams.set('pageNo', '1')
+    url.searchParams.set('inqryDiv', '1')
+    url.searchParams.set('inqryBgnDate', dateKey(beginDate))
+    url.searchParams.set('inqryEndDate', dateKey(endDate))
     url.searchParams.set('type', 'json')
 
     const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) })
     if (!response.ok) throw new Error(`PPS API error: ${response.status}`)
     const json: any = await response.json()
-    const resultCode = json?.response?.header?.resultCode
+    const envelope = responseEnvelope(json)
+    const resultCode = envelope?.header?.resultCode
     if (resultCode !== '00') throw new Error(`PPS API resultCode=${resultCode ?? 'unknown'}`)
+    return asItems(envelope)
+  }
 
-    const items = asItems(json)
+  async healthCheck(): Promise<void> {
+    await this.fetchItems()
+  }
+
+  async getPrices(materialKeys: string[]): Promise<MaterialPriceItem[]> {
+    const items = await this.fetchItems()
     const result = materialKeys.flatMap((materialKey) => {
       const catalog = MATERIAL_CATALOG.find((entry) => entry.key === materialKey)
       const keywords = KEYWORDS[materialKey]
@@ -62,7 +83,7 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
       const item = items.find((candidate) => keywords.some((keyword) => JSON.stringify(candidate).toLowerCase().includes(keyword.toLowerCase())))
       const price = numberFrom(item)
       if (!item || !price) return []
-      const updatedAt = item.stdrDt ?? item.priceBasisDate ?? item.dataCrtrYmd ?? new Date().toISOString()
+      const updatedAt = item.nticeDt ?? item.stdrDt ?? item.priceBasisDate ?? item.dataCrtrYmd ?? new Date().toISOString()
       return [{
         materialKey,
         label: catalog.label,

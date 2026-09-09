@@ -62,15 +62,8 @@ export class AiBriefingRepository {
       .run()
   }
 
-  async deleteLegacyEmptySuccessById(id: string): Promise<void> {
-    await this.db
-      .prepare("DELETE FROM ai_briefings WHERE id = ? AND status = 'success'")
-      .bind(id)
-      .run()
-  }
-
   /**
-   * 동시 요청 시 중복 생성을 막기 위해 INSERT OR IGNORE 사용.
+   * 동시 요청의 UNIQUE 충돌만 무시하고 다른 저장 오류는 호출부에 전달한다.
    * D1(SQLite)의 UNIQUE(user_id, briefing_date) 제약이 실제 방어선이다.
    * 반환값이 false면 이미 다른 요청이 먼저 생성했다는 뜻 -> 호출부는 findByUserAndDate로 재조회.
    */
