@@ -12,6 +12,7 @@ import { MaterialPriceWidget } from './MaterialPriceWidget'
 import { MarketSummaryWidget } from './MarketSummaryWidget'
 import { AiBriefingWidget } from './AiBriefingWidget'
 import { NearbyTrafficWidget } from './NearbyTrafficWidget'
+import { DynamicMapWidget } from './DynamicMapWidget'
 
 /**
  * Widget Registry (기획 3~4번).
@@ -116,6 +117,20 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     defaultSize: { w: 1, h: 2 },
     minSize: { w: 1, h: 1 },
     maxSize: { w: 2, h: 3 },
+    refreshInterval: 5 * 60 * 1000,
+    supportsLocation: true,
+    supportsManualRefresh: true,
+  },
+  {
+    id: 'dynamicMap',
+    title: '현장 교통지도',
+    description: '네이버 Dynamic Map에 현장 위치와 주변 도로의 교통상황을 표시합니다',
+    category: '현장환경',
+    icon: 'MapPinned',
+    component: DynamicMapWidget,
+    defaultSize: { w: 2, h: 2 },
+    minSize: { w: 1, h: 2 },
+    maxSize: { w: 3, h: 3 },
     refreshInterval: 5 * 60 * 1000,
     supportsLocation: true,
     supportsManualRefresh: true,

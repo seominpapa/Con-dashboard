@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { beforeEach, test } from 'node:test'
 
 import { AirKoreaProvider } from '../src/worker/providers/air-quality/AirKoreaProvider.ts'
 import { KmaWeatherProvider } from '../src/worker/providers/weather/KmaWeatherProvider.ts'
+
+beforeEach((t) => t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-09-08T03:00:00Z') }))
 
 const site = {
   id: 'site-1',
@@ -48,7 +50,7 @@ test('KMA warning responses with numeric station ids do not crash regional filte
   }
 })
 
-test('AirKorea resolves a station from the site address before requesting realtime measurements', async () => {
+test('AirKorea resolves a station from the nationwide catalog before requesting realtime measurements', async () => {
   const originalFetch = globalThis.fetch
   const calls = []
   const signals = []
@@ -80,7 +82,8 @@ test('AirKorea resolves a station from the site address before requesting realti
     const result = await new AirKoreaProvider('test-key').getCurrentAirQuality(site)
     assert.equal(calls.length, 2)
     assert.match(calls[0].pathname, /MsrstnInfoInqireSvc\/getMsrstnList$/)
-    assert.equal(calls[0].searchParams.get('addr'), '안성시')
+    assert.equal(calls[0].searchParams.has('addr'), false)
+    assert.equal(calls[0].searchParams.get('numOfRows'), '1000')
     assert.ok(signals.every((signal) => signal instanceof AbortSignal))
     assert.equal(result.stationName, '안성')
     assert.equal(result.pm10, 21)

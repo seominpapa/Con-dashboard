@@ -4,6 +4,28 @@ import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredential
 import type { MaterialPriceProvider } from './MaterialPriceProvider'
 
 const ENDPOINT = 'https://apis.data.go.kr/1230000/ao/PriceInfoService/getPriceInfoListFcltyCmmnMtrilTotal'
+export class PpsApiError extends Error {}
+
+const ERROR_GUIDANCE: Record<string, string> = {
+  '01': '기관 내부 오류입니다. 잠시 후 다시 시도해 주세요',
+  '03': '조회 결과 없음',
+  '04': '기관 API 요청 처리에 실패했습니다',
+  '05': '기관 응답 대기시간을 초과했습니다. 잠시 후 다시 시도해 주세요',
+  '10': '조회 요청변수 또는 날짜 형식을 확인해 주세요',
+  '12': 'API 서비스 주소를 확인해 주세요',
+  '20': '인증키 전달 및 가격정보현황서비스 활용신청·승인·중지 상태를 확인해 주세요',
+  '22': '일일 호출 한도를 초과했습니다. 초기화 이후 재시도하거나 한도 증설을 신청하세요',
+  '23': '초당 호출 한도를 초과했습니다. 잠시 후 다시 시도해 주세요',
+  '29': '호출 서버 IP가 차단되었습니다. 활용지원센터에 문의해 주세요',
+  '30': '등록되지 않은 인증키입니다. 키와 가격정보현황서비스 활용신청을 확인해 주세요',
+  '31': '인증키 사용기간이 만료되었습니다. 공공데이터포털에서 갱신해 주세요',
+}
+
+function safePpsError(status: number, code: unknown): PpsApiError {
+  const known = typeof code === 'string' && Object.hasOwn(ERROR_GUIDANCE, code)
+  const detail = known ? ERROR_GUIDANCE[code] : status >= 500 ? '기관 서버 오류입니다. 잠시 후 다시 시도해 주세요' : '알 수 없는 응답입니다. API 승인 상태와 기관 응답을 확인해 주세요'
+  return new PpsApiError(`조달청 가격정보 API: ${detail} (HTTP ${status}${known ? `, 코드 ${code}` : ''})`)
+}
 const KEYWORDS: Record<string, string[]> = {
   rebar: ['철근', '이형봉강'],
   'h-beam': ['H형강', '에이치형강'],
@@ -49,29 +71,45 @@ export class PpsMaterialPriceProvider implements MaterialPriceProvider {
     this.serviceKey = normalizeDataGoKrServiceKey(serviceKey)
   }
 
-  private async fetchItems(): Promise<any[]> {
+  private async fetchItems(numOfRows = 1000): Promise<any[]> {
     const endDate = new Date()
     const beginDate = new Date(endDate.getTime() - 366 * 86400000)
     const url = new URL(ENDPOINT)
     url.searchParams.set('serviceKey', this.serviceKey)
-    url.searchParams.set('numOfRows', '1000')
+    url.searchParams.set('numOfRows', String(numOfRows))
     url.searchParams.set('pageNo', '1')
     url.searchParams.set('inqryDiv', '1')
     url.searchParams.set('inqryBgnDate', dateKey(beginDate))
     url.searchParams.set('inqryEndDate', dateKey(endDate))
     url.searchParams.set('type', 'json')
 
-    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) })
-    if (!response.ok) throw new Error(`PPS API error: ${response.status}`)
-    const json: any = await response.json()
+    let response: Response
+    let text: string
+    try {
+      response = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) })
+      text = await response.text()
+    } catch (error) {
+      const timeout = error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name)
+      throw new PpsApiError(timeout ? '조달청 API 응답 대기시간을 초과했습니다. 잠시 후 다시 시도해 주세요' : '조달청 API와 통신하지 못했습니다. 잠시 후 다시 시도해 주세요')
+    }
+    let json: any
+    try { json = JSON.parse(text) } catch { /* 게이트웨이는 JSON 요청에도 XML 오류를 반환한다. */ }
     const envelope = responseEnvelope(json)
     const resultCode = envelope?.header?.resultCode
-    if (resultCode !== '00') throw new Error(`PPS API resultCode=${resultCode ?? 'unknown'}`)
+    const gatewayCode = json?.OpenAPI_ServiceResponse?.cmmMsgHeader?.returnReasonCode
+      ?? (/^\s*(?:<\?xml[^>]*>\s*)?<OpenAPI_ServiceResponse[\s>]/.test(text)
+        ? /<returnReasonCode>\s*(\d{2})\s*<\/returnReasonCode>/.exec(text)?.[1] : undefined)
+    if (!response.ok || gatewayCode !== undefined) throw safePpsError(response.status, gatewayCode ?? resultCode)
+    if (!json) throw new PpsApiError(`조달청 API 응답 형식이 올바르지 않습니다 (HTTP ${response.status})`)
+    if (resultCode === '03') return []
+    if (resultCode !== '00') throw safePpsError(response.status, resultCode)
+    if (!envelope.body || typeof envelope.body !== 'object') throw new PpsApiError(`조달청 API 응답 형식이 올바르지 않습니다 (HTTP ${response.status})`)
     return asItems(envelope)
   }
 
-  async healthCheck(): Promise<void> {
-    await this.fetchItems()
+  async healthCheck(): Promise<string> {
+    const items = await this.fetchItems(1)
+    return items.length ? '조달청 가격정보 API 연결 확인 완료' : '조달청 가격정보 API 연결 확인 완료 · 조회 결과 없음 (선택 기간 내 자료 없음)'
   }
 
   async getPrices(materialKeys: string[]): Promise<MaterialPriceItem[]> {

@@ -64,7 +64,7 @@ test('PPS material provider rejects invalid upstream responses so the route can 
   try {
     await assert.rejects(
       () => new PpsMaterialPriceProvider('key').getPrices(['rebar']),
-      (error) => error instanceof Error && error.message === 'PPS API resultCode=30' && !error.message.includes('must-not-leak'),
+      (error) => error instanceof Error && /HTTP 200, 코드 30/.test(error.message) && !error.message.includes('must-not-leak'),
     )
   } finally {
     globalThis.fetch = originalFetch

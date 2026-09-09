@@ -5,6 +5,11 @@ export type AirQualityGrade = 'good' | 'moderate' | 'bad' | 'very-bad'
 export interface AirQualityNow {
   siteId: string
   stationName: string
+  stationAddress?: string
+  stationLatitude?: number
+  stationLongitude?: number
+  stationDistanceKm?: number
+  stationSelection?: 'configured' | 'distance' | 'area'
   measuredAt: string
   pm10: number
   pm10Grade: AirQualityGrade

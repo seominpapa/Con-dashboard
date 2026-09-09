@@ -10,7 +10,8 @@ export async function getAirQualityProvider(env: Bindings): Promise<AirQualityPr
   const dbCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>('airkorea').catch(() => null)
   const apiKey = dbCred?.apiKey || env.AIRKOREA_SERVICE_KEY
   if (apiKey) {
-    return new AirKoreaProvider(apiKey)
+    const stationCred = await integrationRepo.getDecryptedCredential<{ apiKey: string }>('airkorea_station').catch(() => null)
+    return new AirKoreaProvider(apiKey, stationCred?.apiKey || env.AIRKOREA_STATION_SERVICE_KEY || apiKey)
   }
   return new MockAirQualityProvider()
 }

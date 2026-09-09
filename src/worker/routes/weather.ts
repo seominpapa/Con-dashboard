@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
-import { getWeatherProvider } from '../providers/weather'
+import { getWeatherProvider, getWeatherAlertProvider } from '../providers/weather'
 import { SiteRepository } from '../repositories/SiteRepository'
 import { withCache, CACHE_TTL, cacheGetStale } from '../cache/memoryCache'
 import { ok, fail } from '../../shared/types/common'
@@ -53,7 +53,7 @@ app.get('/alerts', async (c) => {
 
   const cacheKey = `weather-alert:${site.id}:${site.address}`
   try {
-    const provider = await getWeatherProvider(c.env)
+    const provider = await getWeatherAlertProvider(c.env)
     const { value: alerts, cached } = await withCache(cacheKey, CACHE_TTL.weatherAlert, () => provider.getAlerts(site))
     const envelope = ok(alerts, provider.source)
     envelope.cached = cached

@@ -59,6 +59,7 @@ export const DEFAULT_WIDGET_ORDER = [
   'calendar',
   'airQuality',
   'nearbyTraffic',
+  'dynamicMap',
   'bidding',
   'constructionNews',
   'marketSummary',

@@ -5,6 +5,7 @@ import { normalizeDataGoKrServiceKey } from '../../integrations/publicCredential
 
 const BASE_URL = 'https://apis.data.go.kr/B552584/ArpltnInforInqireSvc'
 const STATION_URL = 'https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getMsrstnList'
+const MAX_STATIONS = 5
 
 const SIDO_NAME: Record<string, string> = {
   서울특별시: '서울', 부산광역시: '부산', 대구광역시: '대구', 인천광역시: '인천', 광주광역시: '광주', 대전광역시: '대전', 울산광역시: '울산', 세종특별자치시: '세종',
@@ -25,6 +26,7 @@ function gradeFromCai(grade: string): AirQualityGrade {
 }
 
 function measurement(value: unknown): number | undefined {
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined
   if (value === null || value === undefined || (typeof value === 'string' && (!value.trim() || value.trim() === '-'))) return undefined
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
@@ -56,72 +58,126 @@ function matchesArea(stationName: unknown, area: string): boolean {
   return typeof stationName === 'string' && (stationName === area || stationName.startsWith(area))
 }
 
+function latestObservations(items: any[]) {
+  const timestamp = (value: string) => Date.parse(`${value.replace(' ', 'T')}+09:00`)
+  const now = Date.now()
+  return items.map(observation).filter((entry): entry is NonNullable<ReturnType<typeof observation>> => {
+    if (!entry) return false
+    const age = now - timestamp(entry.measuredAt)
+    return age >= -10 * 60 * 1000 && age <= 3 * 60 * 60 * 1000
+  })
+    .sort((a, b) => timestamp(b.measuredAt) - timestamp(a.measuredAt))
+}
+
+function stationLocation(station: any, site: Site) {
+  const latitude = measurement(station?.dmX)
+  const longitude = measurement(station?.dmY)
+  if (latitude === undefined || longitude === undefined || latitude < 32 || latitude > 40 || longitude < 124 || longitude > 132 || !Number.isFinite(site.latitude) || !Number.isFinite(site.longitude)) return {}
+  const radians = (value: number) => value * Math.PI / 180
+  const a = Math.sin(radians(latitude - site.latitude) / 2) ** 2
+    + Math.cos(radians(site.latitude)) * Math.cos(radians(latitude)) * Math.sin(radians(longitude - site.longitude) / 2) ** 2
+  return { stationLatitude: latitude, stationLongitude: longitude, stationDistanceKm: 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, a))) }
+}
+
 export class AirKoreaProvider implements AirQualityProvider {
   readonly source = 'live' as const
   private serviceKey: string
+  private stationServiceKey: string
 
-  constructor(serviceKey: string) {
+  constructor(serviceKey: string, stationServiceKey = serviceKey) {
     this.serviceKey = normalizeDataGoKrServiceKey(serviceKey)
+    this.stationServiceKey = normalizeDataGoKrServiceKey(stationServiceKey)
+  }
+
+  private async request(endpoint: string, params: Record<string, string>) {
+    const url = new URL(endpoint)
+    url.searchParams.set('serviceKey', endpoint === STATION_URL ? this.stationServiceKey : this.serviceKey)
+    url.searchParams.set('returnType', 'json')
+    url.searchParams.set('pageNo', '1')
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
+    try {
+      const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) })
+      if (!res.ok) throw new Error('request failed')
+      const json: any = await res.json()
+      if (json?.response?.header?.resultCode !== '00') throw new Error('API result failed')
+      const body = json?.response?.body
+      if (!Array.isArray(body?.items)) throw new Error('invalid items')
+      return { items: body.items as any[], totalCount: measurement(body.totalCount) }
+    } catch {
+      throw new Error('AirKorea API 조회 실패: 서비스 활용신청·승인 상태 또는 일시적인 통신 오류를 확인하세요')
+    }
+  }
+
+  async healthCheckStations(): Promise<void> {
+    await this.request(STATION_URL, { numOfRows: '1' })
+  }
+
+  private async stations() {
+    let stations: any[] = []
+    // ponytail: 최대 3,000개까지 조회; 목록이 더 크면 불완전한 거리 순위 대신 지역 대체 조회를 사용한다.
+    for (let page = 1; page <= 3; page += 1) {
+      const body = await this.request(STATION_URL, { numOfRows: '1000', pageNo: String(page) })
+      stations = [...stations, ...body.items]
+      if (body.totalCount !== undefined ? stations.length >= body.totalCount : body.items.length < 1000) return stations
+      if (body.items.length === 0) break
+    }
+    return []
+  }
+
+  private async stationReading(stationName: string) {
+    const { items } = await this.request(`${BASE_URL}/getMsrstnAcctoRltmMesureDnsty`, { stationName, numOfRows: '24', dataTerm: 'DAILY', ver: '1.3' })
+    return latestObservations(items.filter((item) => !item?.stationName || item.stationName === stationName))[0]
   }
 
   async getCurrentAirQuality(site: Site): Promise<AirQualityNow> {
-    let stationName = site.airkoreaStationName
-    if (!stationName) {
-      const addressParts = site.address.trim().split(/\s+/)
-      const stationUrl = new URL(STATION_URL)
-      stationUrl.searchParams.set('serviceKey', this.serviceKey)
-      stationUrl.searchParams.set('returnType', 'json')
-      stationUrl.searchParams.set('numOfRows', '100')
-      stationUrl.searchParams.set('pageNo', '1')
-      stationUrl.searchParams.set('addr', addressParts[1] ?? addressParts[0] ?? '')
-
+    if (site.airkoreaStationName) {
+      const selected = await this.stationReading(site.airkoreaStationName)
+      if (!selected) throw new Error('AirKorea: 유효한 측정 데이터 없음')
+      return this.result(site, selected, { stationName: site.airkoreaStationName, stationSelection: 'configured' })
+    }
+    const [province, ...areas] = site.address.trim().split(/\s+/)
+    let stations: any[] = []
+    try {
+      stations = await this.stations()
+    } catch {
+      // 측정소 정보 API는 별도 승인일 수 있으므로 기본 대기질 API로 후퇴한다.
+    }
+    const candidates = stations.filter((station) => typeof station?.stationName === 'string' && station.stationName.trim())
+      .map((station) => ({ station, ...stationLocation(station, site) }))
+    const located = candidates.filter((candidate) => candidate.stationDistanceKm !== undefined)
+      .sort((a, b) => a.stationDistanceKm! - b.stationDistanceKm!)
+    const nearby = located.length ? located : candidates.filter(({ station }) =>
+      typeof station.addr === 'string' && (station.addr.startsWith(province) || station.addr.startsWith(SIDO_NAME[province] ?? province))
+      && areas.some((area) => station.addr.includes(area)))
+    // ponytail: 관측 조회는 가까운 5곳까지; 더 넓은 탐색이 필요하면 이 제한을 늘린다.
+    for (const candidate of nearby.slice(0, MAX_STATIONS)) {
       try {
-        const stationRes = await fetch(stationUrl.toString(), { signal: AbortSignal.timeout(10_000) })
-        if (!stationRes.ok) throw new Error(`AirKorea 측정소 조회 실패: ${stationRes.status}`)
-        const stationJson: any = await stationRes.json()
-        if (stationJson?.response?.header?.resultCode !== '00') throw new Error('AirKorea 측정소 API 요청 실패')
-        const stations: any[] = stationJson?.response?.body?.items ?? []
-        const station = stations.find((candidate) => addressParts.slice(1).some((part) => String(candidate.addr ?? '').includes(part))) ?? stations[0]
-        stationName = station?.stationName
+        const selected = await this.stationReading(candidate.station.stationName)
+        if (selected) return this.result(site, selected, {
+          stationName: candidate.station.stationName,
+          stationAddress: typeof candidate.station.addr === 'string' ? candidate.station.addr : undefined,
+          stationLatitude: candidate.stationLatitude, stationLongitude: candidate.stationLongitude,
+          stationDistanceKm: candidate.stationDistanceKm, stationSelection: located.length ? 'distance' : 'area',
+        })
       } catch {
-        // 측정소 정보 API는 별도 승인일 수 있으므로 기본 대기질 API로 후퇴한다.
+        // 한 측정소의 조회 실패는 다음 후보 조회로 복구한다.
       }
     }
-
-    const byStation = Boolean(stationName)
-    const url = new URL(`${BASE_URL}/${byStation ? 'getMsrstnAcctoRltmMesureDnsty' : 'getCtprvnRltmMesureDnsty'}`)
-    url.searchParams.set('serviceKey', this.serviceKey)
-    url.searchParams.set('returnType', 'json')
-    url.searchParams.set('numOfRows', byStation ? '24' : '100')
-    url.searchParams.set('pageNo', '1')
-    if (byStation) {
-      url.searchParams.set('stationName', stationName!)
-      url.searchParams.set('dataTerm', 'DAILY')
-    } else {
-      const province = site.address.trim().split(/\s+/)[0]
-      url.searchParams.set('sidoName', SIDO_NAME[province] ?? province)
-    }
-    url.searchParams.set('ver', '1.3')
-
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) })
-    if (!res.ok) throw new Error(`AirKorea 실시간 측정 조회 실패: ${res.status}`)
-    const json: any = await res.json()
-    if (json?.response?.header?.resultCode !== '00') throw new Error(`AirKorea API resultCode=${json?.response?.header?.resultCode}`)
-    const items: any[] = json?.response?.body?.items ?? []
-    const observations = items.map(observation).filter((item): item is NonNullable<ReturnType<typeof observation>> => item !== null)
-    const areas = site.address.trim().split(/\s+/).slice(1)
+    const { items } = await this.request(`${BASE_URL}/getCtprvnRltmMesureDnsty`, { sidoName: SIDO_NAME[province] ?? province, numOfRows: '1000', ver: '1.3' })
+    const observations = latestObservations(items).filter(({ item }) => typeof item.stationName === 'string' && item.stationName.trim())
     const abbreviatedAreas = areas.map((part) => part.replace(/[시군구읍면동리]$/, '')).filter((part) => part.length >= 2)
-    // ponytail: 시도별 API에 거리가 없으므로 행정구역명을 가장 가까운 측정소 기준으로 사용한다.
-    const selected = byStation
-      ? observations[0]
-      : observations.find(({ item }) => areas.some((area) => matchesArea(item.stationName, area)))
-        ?? observations.find(({ item }) => abbreviatedAreas.some((area) => matchesArea(item.stationName, area)))
+    const selected = observations.find(({ item }) => areas.some((area) => matchesArea(item.stationName, area)))
+      ?? observations.find(({ item }) => abbreviatedAreas.some((area) => matchesArea(item.stationName, area)))
     if (!selected) throw new Error('AirKorea: 유효한 측정 데이터 없음')
-    const { item, measuredAt, pm10, pm25, o3, chai } = selected
+    const station = candidates.find((candidate) => candidate.station.stationName === selected.item.stationName)?.station
+    return this.result(site, selected, { stationName: selected.item.stationName, stationAddress: typeof station?.addr === 'string' ? station.addr : undefined, stationSelection: 'area' })
+  }
 
+  private result(site: Site, selected: NonNullable<ReturnType<typeof observation>>, station: Pick<AirQualityNow, 'stationName' | 'stationAddress' | 'stationLatitude' | 'stationLongitude' | 'stationDistanceKm' | 'stationSelection'>): AirQualityNow {
+    const { item, measuredAt, pm10, pm25, o3, chai } = selected
     return {
       siteId: site.id,
-      stationName: item.stationName ?? stationName,
+      ...station,
       measuredAt,
       pm10,
       pm10Grade: gradeFromCai(item.pm10Grade ?? '2'),

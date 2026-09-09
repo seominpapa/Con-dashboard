@@ -133,7 +133,7 @@ test('public API connection stores a valid optional expiry date in existing inte
     }, { DB: store.database, AUTH_SECRET: 's'.repeat(32) })
 
     assert.equal(response.status, 200)
-    assert.deepEqual(JSON.parse(store.row('kma').metadata), { expiresAt })
+    assert.deepEqual(JSON.parse(store.row('kma').metadata), { expiresAt, noExpiry: false })
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -207,7 +207,7 @@ test('admin renewal UI uses the native date control, shows expiry details, and s
   assert.match(source, /API Key 입력/)
   assert.match(source, /연결 테스트/)
   assert.match(source, /나라장터 자격증명 재사용 중/)
-  assert.match(source, /credential:\s*credInputs[\s\S]*expiresAt|expiresAt[\s\S]*credential:\s*credInputs/)
+  assert.match(source, /credential:\s*credInputs, \.\.\.management/)
 })
 
 test('material price integration tests the PPS material endpoint instead of the bid endpoint', async () => {

@@ -2,23 +2,29 @@ import type { PublicApiProviderKey } from '../../shared/types/integration'
 
 const REQUIRED_FIELDS: Record<PublicApiProviderKey, readonly string[]> = {
   kma: ['apiKey'],
+  kma_alert: ['apiKey'],
   airkorea: ['apiKey'],
+  airkorea_station: ['apiKey'],
   g2b: ['apiKey'],
   material_prices: ['apiKey'],
   law: ['oc'],
   ecos: ['apiKey'],
   naver_maps: ['clientId', 'clientSecret'],
+  naver_dynamic_map: ['clientId'],
   its: ['apiKey'],
 }
 
 const FAILURE_LABELS: Record<PublicApiProviderKey, string> = {
   kma: '기상청',
+  kma_alert: '기상청 기상특보',
   airkorea: 'AirKorea',
+  airkorea_station: 'AirKorea 측정소정보',
   g2b: '나라장터',
   material_prices: '조달청 가격정보현황서비스',
   law: '국가법령정보',
   ecos: '한국은행 ECOS',
   naver_maps: 'NAVER Cloud Maps 주소 검색',
+  naver_dynamic_map: 'NAVER Dynamic Map 교통지도',
   its: '국가교통정보센터(ITS)',
 }
 
@@ -54,6 +60,10 @@ export function validatePublicCredential(provider: PublicApiProviderKey, input: 
       return { valid: false, message: '필수 자격증명을 모두 입력해 주세요' }
     }
     credential[field] = value.trim()
+  }
+
+  if (provider === 'naver_dynamic_map' && !/^[a-zA-Z0-9]{1,128}$/.test(credential.clientId)) {
+    return { valid: false, message: 'Dynamic Map Client ID는 영문·숫자 128자 이내로 입력해 주세요' }
   }
 
   return { valid: true, credential }

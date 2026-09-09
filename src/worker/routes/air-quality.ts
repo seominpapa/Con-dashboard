@@ -20,7 +20,7 @@ app.get('/', async (c) => {
   const site = await getSite(c)
   if (!site) return c.json(fail('현장을 찾을 수 없습니다', 'live'), 404)
 
-  const cacheKey = `air-quality:${site.id}:${site.airkoreaStationName ?? ''}`
+  const cacheKey = `air-quality:${site.id}:${site.latitude}:${site.longitude}:${site.address}:${site.airkoreaStationName ?? ''}`
   try {
     const provider = await getAirQualityProvider(c.env)
     const { value, cached } = await withCache(cacheKey, CACHE_TTL.airQuality, () => provider.getCurrentAirQuality(site))

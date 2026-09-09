@@ -20,4 +20,12 @@ export async function getWeatherProvider(env: Bindings): Promise<WeatherProvider
   return new MockWeatherProvider()
 }
 
+/** 특보 전용 키를 우선 사용하고 기존 단기예보 키의 특보 승인도 계속 지원한다. */
+export async function getWeatherAlertProvider(env: Bindings): Promise<WeatherProvider> {
+  const repo = new IntegrationRepository(env.DB, getAuthSecretFromEnv(env))
+  const credential = await repo.getDecryptedCredential<{ apiKey: string }>('kma_alert')
+  const apiKey = credential?.apiKey || env.KMA_ALERT_SERVICE_KEY
+  return apiKey ? new KmaWeatherProvider(apiKey) : getWeatherProvider(env)
+}
+
 export * from './WeatherProvider'

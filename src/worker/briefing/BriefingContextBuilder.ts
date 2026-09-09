@@ -1,6 +1,6 @@
 import type { Bindings } from '../env'
 import type { Site } from '../../shared/types/site'
-import { getWeatherProvider } from '../providers/weather'
+import { getWeatherProvider, getWeatherAlertProvider } from '../providers/weather'
 import { getAirQualityProvider } from '../providers/air-quality'
 import { getBidProvider } from '../providers/bidding'
 import { getNewsProvider } from '../providers/news'
@@ -90,7 +90,7 @@ export async function buildBriefingContext(
     tasks.push(
       (async () => {
         try {
-          const provider = await getWeatherProvider(env)
+          const provider = await getWeatherAlertProvider(env)
           const alerts = await provider.getAlerts(site)
           if (alerts.length > 0) context.weatherAlerts = { data: alerts, freshness: 'fresh' }
         } catch {

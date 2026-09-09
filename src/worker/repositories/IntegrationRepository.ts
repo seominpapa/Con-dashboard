@@ -112,6 +112,15 @@ export class IntegrationRepository {
       .run()
   }
 
+  /** 자격증명·연결상태를 건드리지 않고 관리정보만 원자적으로 병합한다. */
+  async updateMetadata(provider: string, metadata: Record<string, unknown>, updatedBy: string): Promise<void> {
+    await this.db.prepare(`UPDATE integrations SET
+      metadata=json_patch(CASE WHEN json_valid(metadata) THEN metadata ELSE '{}' END, ?),
+      updated_by=?, updated_at=? WHERE provider=?`)
+      .bind(JSON.stringify(metadata), updatedBy, new Date().toISOString(), provider)
+      .run()
+  }
+
   async recordCheckResult(provider: string, success: boolean, errorMessage?: string): Promise<void> {
     const now = new Date().toISOString()
     if (success) {
