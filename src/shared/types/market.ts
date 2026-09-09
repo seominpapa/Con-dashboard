@@ -31,6 +31,8 @@ export interface MaterialPriceItem {
   source: string
   updatedAt: string
   isMock: boolean
+  /** 조달청 기준가격이 없어 한국은행 ECOS 지수만 표시하는 품목인지 여부 */
+  indexOnly?: boolean
   /** 한국은행 ECOS 생산자물가지수(월간). 절대 가격이 아니라 변동 참고 지표다. */
   producerPriceIndex?: { value: number; changeRate: number; asOf: string }
 }

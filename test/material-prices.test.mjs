@@ -102,8 +102,12 @@ test('material widgets persist user-selected materials and hide unavailable live
   assert.match(prices, /m\.hasTrend/)
   assert.match(summary, /hasTrend/)
   assert.match(registry, /G2B_SERVICE_KEY/)
-  assert.match(route, /MockMaterialPriceProvider/)
-  assert.match(route, /조달청 가격정보현황서비스/)
+  assert.doesNotMatch(route, /MockMaterialPriceProvider/)
+  assert.match(route, /조달청 나라장터 가격정보현황서비스/)
+  assert.match(route, /indexOnlyMaterials/)
+  assert.match(route, /조달청 기준가격이 없는 모든 자재/)
+  assert.match(summary, /한국은행 ECOS 생산자물가지수/)
+  assert.match(summary, /lme\.code-label\.kr/)
 })
 
 test('material prices have a dedicated admin integration and prefer its credential with G2B fallback', () => {

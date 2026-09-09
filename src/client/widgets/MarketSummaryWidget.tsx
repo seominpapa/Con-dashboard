@@ -10,7 +10,7 @@ import type { ExchangeRateItem, MaterialPriceItem, TrendDirection } from '../../
 interface SummaryIndicator {
   key: string
   label: string
-  displayValue: string
+  displayValue?: string
   changeRate: number
   direction: TrendDirection
   hasTrend: boolean
@@ -66,11 +66,11 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
       next.push({
         key: material.materialKey,
         label: material.label,
-        displayValue: `${material.price.toLocaleString('ko-KR')}/${material.unit}`,
+        displayValue: material.indexOnly ? undefined : `${material.price.toLocaleString('ko-KR')}/${material.unit}`,
         changeRate: material.changeRate,
         direction: material.direction,
         hasTrend: material.hasTrend !== false,
-        source: material.isMock ? '참고용 Mock' : '조달청 기준가격',
+        source: material.indexOnly ? '한국은행 ECOS 생산자물가지수' : material.isMock ? '참고용 Mock' : '조달청 기준가격',
         producerPriceIndex: material.producerPriceIndex,
       })
     }
@@ -81,7 +81,8 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
     setStale(false)
     setIsMock([ex.source, mat.source].includes('mock') || (mat.data ?? []).some((material) => material.isMock))
     setUpdatedAt(new Date().toISOString())
-    setBasis([ex.asOf && `환율 ${formatAsOf(ex.asOf)}`, mat.asOf && `자재 고시 ${formatAsOf(mat.asOf)}`].filter(Boolean).join(' · ') || null)
+    const materialAsOf = mat.asOf ?? mat.data?.map((item) => item.producerPriceIndex?.asOf).filter((value): value is string => Boolean(value)).sort().at(-1)
+    setBasis([ex.asOf && `환율 ${formatAsOf(ex.asOf)}`, materialAsOf && `자재 기준 ${formatAsOf(materialAsOf)}`].filter(Boolean).join(' · ') || null)
   }, [materialQuery])
 
   const toggleMaterial = (key: string) => {
@@ -113,7 +114,7 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
             <div key={i.key} className="rounded bg-slate-50 px-2 py-1.5">
               <p className="text-[11px] text-slate-500">{i.label}</p>
               <div className="mt-0.5 flex items-center gap-1">
-                <span className="text-xs font-semibold text-slate-800">{i.displayValue}</span>
+                {i.displayValue && <span className="text-xs font-semibold text-slate-800">{i.displayValue}</span>}
                 {i.hasTrend && DIR_ICON[i.direction]}
               </div>
               {i.hasTrend && (
@@ -124,7 +125,7 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
               {i.source && <p className="mt-1 text-[9px] text-slate-400">{i.source}</p>}
               {i.producerPriceIndex && (
                 <p className="mt-0.5 text-[9px] text-slate-500">
-                  ECOS 지수 {i.producerPriceIndex.value.toFixed(1)} · 전월 {i.producerPriceIndex.changeRate > 0 ? '+' : ''}{i.producerPriceIndex.changeRate.toFixed(2)}% ({i.producerPriceIndex.asOf})
+                  한국은행 ECOS 생산자물가지수 {i.producerPriceIndex.value.toFixed(1)} · 전월 {i.producerPriceIndex.changeRate > 0 ? '+' : ''}{i.producerPriceIndex.changeRate.toFixed(2)}% ({i.producerPriceIndex.asOf}) · <a className="text-blue-600 hover:underline" href="https://lme.code-label.kr/" target="_blank" rel="noreferrer">실가격 확인(가격DB센터)</a>
                 </p>
               )}
             </div>
@@ -141,7 +142,7 @@ export function MarketSummaryWidget({ settings, onSettingsChange }: WidgetProps)
             </div>
             <div className="mt-2 flex gap-3 text-[10px]">
               <a className="text-blue-600 hover:underline" href="https://www.data.go.kr/data/15129415/openapi.do" target="_blank" rel="noreferrer">조달청 기준가격 원문</a>
-              <a className="text-blue-600 hover:underline" href="https://ecos.bok.or.kr/api/" target="_blank" rel="noreferrer">ECOS 지수 원문</a>
+              <a className="text-blue-600 hover:underline" href="https://ecos.bok.or.kr/api/" target="_blank" rel="noreferrer">한국은행 ECOS 지수 원문</a>
             </div>
           </details>
         </div>
