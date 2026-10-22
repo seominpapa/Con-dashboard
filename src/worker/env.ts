@@ -1,13 +1,14 @@
+import type { Database } from './database'
 /**
- * Cloudflare Workers 환경변수 타입
+ * 서버 환경변수 타입 (Cloudflare Workers / Node.js)
  * - 모든 외부 API 인증키는 서버(Worker) 환경변수로만 존재한다.
  * - 비밀키는 Client Browser에 노출하지 않는다. Dynamic Map 공개 Client ID만 예외다.
  */
 export interface Bindings {
-  DB: D1Database
+  DB: Database
 
   // ---- 인증/세션 ----
-  /** 세션 서명/암호화에 사용하는 서버 비밀키. 미설정 시 개발용 기본값 사용(운영 배포 전 반드시 설정) */
+  /** 세션 서명/암호화에 사용하는 서버 비밀키. 32자 이상 필수, 미설정 시 인증 비활성화 */
   AUTH_SECRET?: string
   /** 최초 부트스트랩 관리자 이메일. 해당 Google 계정 최초 로그인 시 ADMIN+APPROVED로 생성 */
   INITIAL_ADMIN_EMAIL?: string

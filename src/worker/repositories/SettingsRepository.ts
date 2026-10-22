@@ -1,8 +1,9 @@
+import type { Database } from '../database'
 /** 서비스 전역 설정 (기본 LLM Provider 등) key-value 저장소 */
 export class SettingsRepository {
-  private db: D1Database
+  private db: Database
 
-  constructor(db: D1Database) {
+  constructor(db: Database) {
     this.db = db
   }
 

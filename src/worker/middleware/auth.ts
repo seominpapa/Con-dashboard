@@ -51,7 +51,7 @@ export async function attachUser(c: Context<AppEnv>, next: Next) {
 /** 쿠키 인증을 사용하는 변경 요청은 현재 사이트에서 시작된 요청만 허용한다. */
 export async function requireSameOriginMutation(c: Context<AppEnv>, next: Next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method.toUpperCase())) return next()
-  if (!isSameOriginMutation(c.req.url, c.req.header('Origin') ?? null, c.req.header('Referer') ?? null)) {
+  if (!isSameOriginMutation(c.env.APP_BASE_URL || c.req.url, c.req.header('Origin') ?? null, c.req.header('Referer') ?? null)) {
     return c.json({ status: 'error', message: '허용되지 않은 요청 출처입니다', code: 'INVALID_ORIGIN' }, 403)
   }
   return next()

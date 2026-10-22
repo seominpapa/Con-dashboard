@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import { getAuthSecret } from '../crypto/encryption'
 import type { Bindings } from '../env'
 
@@ -44,14 +45,14 @@ export interface SessionRow {
   expires_at: string
 }
 
-export async function createSession(db: D1Database, userId: string): Promise<string> {
+export async function createSession(db: Database, userId: string): Promise<string> {
   const id = generateId('sess')
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
   await db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').bind(id, userId, expiresAt).run()
   return id
 }
 
-export async function getSessionUserId(db: D1Database, sessionId: string): Promise<string | null> {
+export async function getSessionUserId(db: Database, sessionId: string): Promise<string | null> {
   const row = await db
     .prepare('SELECT user_id, expires_at FROM sessions WHERE id = ?')
     .bind(sessionId)
@@ -64,7 +65,7 @@ export async function getSessionUserId(db: D1Database, sessionId: string): Promi
   return row.user_id
 }
 
-export async function deleteSession(db: D1Database, sessionId: string): Promise<void> {
+export async function deleteSession(db: Database, sessionId: string): Promise<void> {
   await db.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run()
 }
 

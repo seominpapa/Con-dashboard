@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import type { TodoItem, TodoPriority, TodoStatus } from '../../shared/types/todo'
 import { generateId } from '../auth/session'
 
@@ -33,7 +34,7 @@ function rowToTodo(row: TodoRow): TodoItem {
 }
 
 export class TodoRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async listByUser(userId: string): Promise<TodoItem[]> {
     const { results } = await this.db.prepare('SELECT * FROM todos WHERE user_id = ? ORDER BY due_date ASC').bind(userId).all<TodoRow>()

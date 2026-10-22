@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import type { IntegrationStatus, IntegrationType, IntegrationSummary } from '../../shared/types/integration'
 import { encryptCredential, decryptCredential } from '../crypto/encryption'
 import { generateId } from '../auth/session'
@@ -50,7 +51,7 @@ function rowToSummary(row: IntegrationRow): IntegrationSummary {
  * - 로그에 Credential을 출력하지 않는다
  */
 export class IntegrationRepository {
-  constructor(private db: D1Database, private authSecret: string) {}
+  constructor(private db: Database, private authSecret: string) {}
 
   async getSummary(provider: string): Promise<IntegrationSummary | null> {
     const row = await this.db.prepare('SELECT * FROM integrations WHERE provider = ?').bind(provider).first<IntegrationRow>()

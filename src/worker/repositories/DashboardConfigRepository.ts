@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 /**
  * 로그인 사용자의 Dashboard 구성을 D1에 저장/조회한다.
  * MVP는 클라이언트 localStorage가 기본이지만, 로그인 사용자는 D1에도 동기화하여
@@ -18,7 +19,7 @@ export interface BriefingDashboardConfig {
 }
 
 export class DashboardConfigRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async get(userId: string): Promise<StoredDashboardConfig | null> {
     const row = await this.db.prepare('SELECT config_json FROM dashboard_configs WHERE user_id = ?').bind(userId).first<{ config_json: string }>()

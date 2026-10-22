@@ -6,3 +6,12 @@ export function isSameOriginMutation(requestUrl: string, origin: string | null, 
     return false
   }
 }
+
+export function useSecureCookies(baseUrl: string): boolean {
+  try {
+    const url = new URL(baseUrl)
+    return url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+  } catch {
+    return true
+  }
+}

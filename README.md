@@ -145,6 +145,106 @@ curl http://localhost:3000
 환경변수는 `.env.example`을 참고해 `.dev.vars`로 복사 후 채워주세요. Google OAuth와
 `AUTH_SECRET`은 로그인에 필수이며, 공개데이터/LLM 키는 비워두면 Mock 또는 준비 중 상태로 동작합니다.
 
+## Cloudflare 외 환경 배포 (Node.js / Docker)
+
+기존 Cloudflare 배포 명령(`npm run build`, `npm run deploy`)에 더해, 같은 앱을
+**Node.js 24 이상 + 로컬 SQLite**로 실행할 수 있습니다. Cloudflare 계정이나 D1은 필요하지
+않으며 Docker, VM, 영구 디스크를 제공하는 컨테이너 클라우드에서 사용할 수 있습니다.
+
+### 공통 설정
+
+```bash
+git clone https://github.com/seominpapa/Con-dashboard.git
+cd Con-dashboard
+cp .env.example .env
+```
+
+`.env`에서 아래 값을 채웁니다. 비밀값은 Git에 올리거나 Docker 이미지에 넣지 마세요.
+
+| 변수 | 설정 |
+|---|---|
+| `AUTH_SECRET` | 32자 이상 임의 비밀키. `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`로 생성 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google Cloud Console에서 발급한 웹 애플리케이션 OAuth 자격증명 |
+| `APP_BASE_URL` | 로컬은 `http://localhost:3000`, 외부 배포는 실제 접속할 HTTPS origin(예: `https://dashboard.example.com`) |
+| `INITIAL_ADMIN_EMAIL` | 최초 관리자 권한을 받을 Google 계정 이메일 |
+
+Google OAuth의 **승인된 리디렉션 URI**에 `${APP_BASE_URL}/api/auth/google/callback`을
+실제 주소로 등록합니다. 로컬 예시는 `http://localhost:3000/api/auth/google/callback`이며,
+외부 주소로 배포하면 Google 설정과 `APP_BASE_URL`을 함께 변경해야 합니다.
+`APP_BASE_URL`에는 경로나 쿼리 없이 origin만 사용합니다. HTTP는 localhost/127.0.0.1/[::1]
+로컬 접속에만 허용하며, 원격 배포에는 HTTPS가 필요합니다.
+
+Google OAuth는 로그인에 필수입니다. 공개데이터·지도·LLM 키는 선택 사항이며, 없으면 해당
+기능에 Mock 데이터 또는 설정 안내가 표시됩니다. 최초 관리자 로그인 후
+`DISABLE_ADMIN_BOOTSTRAP=true`로 설정하고 재시작할 수 있습니다.
+
+### Docker Compose로 실행
+
+Docker Engine과 Compose 플러그인이 설치된 환경에서, 공통 설정을 마친 뒤 실행합니다.
+
+```bash
+docker compose up -d --build
+docker compose logs -f dashboard
+```
+
+`http://localhost:3000`에 접속합니다. `http://localhost:3000/healthz`로 서버와 DB 상태를
+확인할 수 있습니다. 이 경로에서는 Docker 이미지를 빌드하며, 호스트에 Node.js를 설치할
+필요는 없습니다. 이미지에는 빌드 결과·마이그레이션·운영 의존성만 포함되고 root가 아닌
+`node` 사용자로 실행됩니다. `.env`는 실행 시 전달됩니다.
+
+Compose는 호스트의 `127.0.0.1:3000`에만 포트를 열고, DB를 `dashboard-data` 이름의
+영구 볼륨(`/data/dashboard.sqlite`)에 보관합니다. `.env`의 Node 전용 경로/포트 설정과
+관계없이 컨테이너 내부는 `HOST=0.0.0.0`, `PORT=3000`, `DATABASE_PATH=/data/dashboard.sqlite`를
+사용합니다. 호스트 포트를 바꾸려면 `compose.yaml`의 `ports` 왼쪽 포트를 바꿉니다.
+
+```bash
+docker compose down          # 컨테이너 종료, DB 볼륨 유지
+docker compose up -d --build  # 코드 업데이트 후 재빌드·재시작
+```
+
+`docker compose down -v`는 DB 볼륨까지 삭제하므로 데이터가 필요하면 사용하지 마세요.
+외부 공개 시 HTTPS 리버스 프록시/로드밸런서를 앞에 두고 `APP_BASE_URL`을 공개 주소로
+설정합니다. 다른 머신이나 컨테이너의 프록시가 접근해야 한다면 네트워크 구성에 맞게
+포트 바인딩을 변경하고 방화벽으로 접근을 제한합니다.
+
+### Docker 없이 Node.js로 실행
+
+Node.js 24 이상과 npm을 설치하고, 공통 설정 후 저장소 루트에서 실행합니다.
+
+```bash
+npm ci
+npm run build:node
+npm start
+```
+
+`npm start`는 `.env`가 있으면 읽고, 기본 `0.0.0.0:3000`에서 실행합니다.
+로컬 머신에서만 접근하려면 `.env`의 `HOST=127.0.0.1`로 제한합니다.
+`DATABASE_PATH` 기본값은 `./data/dashboard.sqlite`이며 부모 디렉터리가 자동 생성됩니다.
+Docker 이미지 빌드는 필요하지 않습니다. 운영에서는 서비스 관리자나 플랫폼의 재시작 정책으로
+프로세스를 관리하고 HTTPS 프록시를 연결합니다.
+
+### 다른 클라우드에서 운영
+
+| 항목 | 설정 |
+|---|---|
+| 컨테이너 | 저장소의 `Dockerfile`로 빌드. 플랫폼이 지정하는 `PORT`와 `HOST=0.0.0.0` 사용 |
+| Node 직접 실행 | 빌드 `npm ci && npm run build:node`, 시작 `npm start` |
+| 저장소 | 쓰기 가능한 영구 디스크를 마운트하고 `DATABASE_PATH`를 그 디스크의 파일 경로로 지정 |
+| 인스턴스 | SQLite 파일을 사용하는 **단일 인스턴스/복제본 1개**로 운영 |
+| 도메인/인증 | HTTPS, 실제 `APP_BASE_URL`, 일치하는 Google OAuth 리디렉션 URI 설정 |
+| 상태 확인 | `GET /healthz` |
+
+임시 파일시스템만 제공하는 서버리스 환경이나 여러 복제본으로의 자동 확장은 이 SQLite
+배포 방식에 맞지 않습니다. `/data`를 마운트하는 클라우드는 `node` 사용자(UID 1000)가 쓸 수
+있게 권한도 설정해야 합니다.
+
+첫 실행 시 `migrations/*.sql`을 순서대로 적용해 새 DB를 만들고, 이후에는 미적용
+마이그레이션만 적용합니다. 기존 Cloudflare D1의 운영 데이터는 자동으로 복사되지 않습니다.
+플랫폼 이동이나 코드/스키마 업데이트 전에는 DB를 백업하세요. 파일 복사로 백업하려면 앱을
+먼저 종료하고 DB 디렉터리 전체를 보관합니다. `AUTH_SECRET`도 DB와 함께 안전하게 백업해야
+저장된 연동 자격증명을 복호화할 수 있습니다. 비밀키를 잃거나 변경하면 관리자 화면에서
+자격증명을 다시 등록해야 합니다.
+
 ## 라이선스
 
 이 프로젝트의 코드는 [MIT License](LICENSE)를 따릅니다. 외부 의존성과 데이터는 각 제공자의

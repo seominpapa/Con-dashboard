@@ -1,8 +1,9 @@
+import type { Database } from '../database'
 import { generateId } from '../auth/session'
 
 /** AI 사용량 로그 (기획 50번 - 관리자 화면에서 Usage 집계용) */
 export class AiUsageLogRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async log(params: {
     userId: string | null

@@ -1,9 +1,10 @@
+import type { Database } from '../database'
 import { SettingsRepository } from '../repositories/SettingsRepository.ts'
 import { ok, type ApiEnvelope } from '../../shared/types/common.ts'
 
 /** Live-only last-good snapshot: one stable key per user/widget, scoped to its query. */
 export async function withWidgetSnapshot<T>(
-  db: D1Database,
+  db: Database,
   key: string,
   scope: string,
   ttlMs: number,

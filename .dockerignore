@@ -1,0 +1,15 @@
+.git
+node_modules
+dist
+.env*
+!.env.example
+.dev.vars*
+.wrangler
+.aws
+.codex
+.agents
+data
+*.sqlite*
+*.db*
+*.log
+.DS_Store

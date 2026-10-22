@@ -11,6 +11,7 @@ import { UserRepository } from '../repositories/UserRepository'
 import { createSession, deleteSession, signSessionValue, verifySessionValue, generateId, sessionCookieName, getAuthSecretFromEnv } from '../auth/session'
 import { toPublicUser } from '../../shared/types/user'
 import { fail } from '../../shared/types/common'
+import { useSecureCookies } from '../security/origin'
 
 const app = new Hono<AppEnv>()
 
@@ -39,7 +40,7 @@ app.get('/google', async (c) => {
   const state = generateId('state')
   setCookie(c, STATE_COOKIE, state, {
     httpOnly: true,
-    secure: true,
+    secure: useSecureCookies(c.env.APP_BASE_URL || c.req.url),
     sameSite: 'Lax',
     maxAge: 600,
     path: '/',
@@ -102,7 +103,7 @@ app.get('/google/callback', async (c) => {
     const signed = await signSessionValue(sessionId, getAuthSecretFromEnv(c.env))
     setCookie(c, sessionCookieName(), signed, {
       httpOnly: true,
-      secure: true,
+      secure: useSecureCookies(c.env.APP_BASE_URL || c.req.url),
       sameSite: 'Lax',
       maxAge: 30 * 24 * 60 * 60,
       path: '/',

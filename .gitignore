@@ -20,6 +20,13 @@ node_modules/
 !.env.example
 .dev.vars*
 
+# local database and SQLite sidecars
+data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
 # logs
 logs/
 *.log

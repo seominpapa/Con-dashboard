@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import type { BriefingStructuredContent } from '../../shared/types/briefing'
 import { generateId } from '../auth/session'
 
@@ -45,7 +46,7 @@ function rowToBriefing(row: BriefingRow): StoredBriefing {
  * userId + briefingDate UNIQUE 제약으로 하루 1회 생성을 DB 레벨에서 보장한다.
  */
 export class AiBriefingRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async findByUserAndDate(userId: string, briefingDate: string): Promise<StoredBriefing | null> {
     const row = await this.db

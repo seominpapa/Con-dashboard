@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import type { Site, SiteStatus } from '../../shared/types/site'
 import { generateId } from '../auth/session'
 
@@ -35,7 +36,7 @@ function rowToSite(row: SiteRow): Site {
 }
 
 export class SiteRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async listByUser(userId: string): Promise<Site[]> {
     const { results } = await this.db.prepare('SELECT * FROM sites WHERE user_id = ? ORDER BY created_at ASC').bind(userId).all<SiteRow>()

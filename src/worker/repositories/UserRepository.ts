@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import type { User, UserRole, UserStatus } from '../../shared/types/user'
 import { generateId } from '../auth/session'
 
@@ -36,7 +37,7 @@ function rowToUser(row: UserRow): User {
  * 인증/승인 로직(AuthService)이 이 Repository를 통해서만 users 테이블에 접근한다.
  */
 export class UserRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async findByGoogleId(googleId: string): Promise<User | null> {
     const row = await this.db.prepare('SELECT * FROM users WHERE google_id = ?').bind(googleId).first<UserRow>()

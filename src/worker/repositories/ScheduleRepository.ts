@@ -1,3 +1,4 @@
+import type { Database } from '../database'
 import type { ScheduleEvent, ScheduleCategory, ScheduleImportance } from '../../shared/types/schedule'
 import { generateId } from '../auth/session'
 
@@ -39,7 +40,7 @@ function rowToEvent(row: ScheduleRow): ScheduleEvent {
 }
 
 export class ScheduleRepository {
-  constructor(private db: D1Database) {}
+  constructor(private db: Database) {}
 
   async listByUser(userId: string, fromISO?: string, toISO?: string): Promise<ScheduleEvent[]> {
     let query = 'SELECT * FROM schedules WHERE user_id = ?'
